@@ -1,14 +1,26 @@
-# Fichiers à ignorer
-*.log
-__pycache__/
+# === Fichiers Python ===
 *.pyc
-*.pyo
-*.pyd
+__pycache__/
 .env
-.venv
-env/
-venv/
-ENV/
-.ipynb_checkpoints/
+.venv/
+*.pyo
+
+# === VS Code ===
+.vscode/
+
+# === Données locales ===
 images/
-exemples_docx/
+*/images/
+*/log/
+*.log
+
+# === Documents privés ===
+*/docx_tab/
+*/docx_lin_in/
+*/docx_lin_out/*.docx
+!test_structure_*/02docx_lin_out/*.docx  # conserve les docx anonymisés de test
+!test_structure_*/02text_p1_out/*.txt   # conserve les .txt utiles
+
+# === Fichiers système ===
+.DS_Store
+Thumbs.db
