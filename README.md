@@ -1,22 +1,8 @@
-# PPL-formulaires
+# 📦 Documentation & Outils Git – PPL-formulaires
 
-Ce dépôt contient les scripts Python pour l’automatisation de la génération, transformation et validation de questionnaires pédagogiques au format Word et texte.
+Ce dossier contient :
 
-## Structure du dépôt
+- `docs/git_consigne_versioning.md` → Guide complet pour versionner proprement les scripts
+- `scripts/list_versions.py` → Outil pour afficher les tags Git liés à un script (ex: passe0)
 
-```
-scripts/             # Tous les scripts Python
-exemples_docx/       # (local uniquement) Fichiers .docx source pour tests
-images/              # Images extraites des documents
-résultats_txt/       # Résultats générés au format .txt
-README.md            # Ce fichier
-.gitignore           # Fichiers à ignorer par Git
-```
-
-## Usage
-
-Lancer les scripts depuis le dossier `scripts/` avec les fichiers d’entrée placés dans `fichiers_tableaux_sources/`.
-
-## Auteur
-
-@jcdidacti
+À intégrer directement dans ton dépôt `PPL-formulaires`.
