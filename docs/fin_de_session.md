@@ -25,3 +25,29 @@
 ---
 
 🧠 Objectif : reprendre facilement la prochaine fois, avec un projet propre, versionné et traçable.
+
+
+---
+
+## 🔁 En cas d'ouverture d'une nouvelle conversation GPT :
+
+Pensez à utiliser le fichier suivant pour restaurer rapidement le contexte :
+
+📄 `docs/nouvelle_conversation_GPT.md`
+
+Copiez-collez son contenu en début de chat pour éviter toute perte de repères (structure, scripts, versions, etc.).
+
+---
+
+## 💾 Sauvegarde automatique vers OneDrive
+
+En fin de session, exécuter le fichier :
+
+📁 `sauvegarde_ppl_vers_onedrive.bat`
+
+Ce script :
+- Copie **l'ensemble du dossier `C:\Dev\PPL-formulaires`**
+- Y compris les fichiers de **`data/`**
+- Crée un dossier horodaté dans `C:\Users\jacqu\OneDrive\90 dev\sauvegardes_PPL\YYYY-MM-DD_HH-MM`
+
+Cela permet de conserver une **trace complète** du projet à chaque fin de session.

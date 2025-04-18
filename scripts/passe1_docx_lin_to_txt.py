@@ -96,10 +96,14 @@ def process_blocs(bloc_liste):
 def convertir_docx_en_txt(docx_path: Path):
     nom_fichier = docx_path.stem
     code = "-".join(nom_fichier.split("-")[:3])
-    file_date = datetime.fromtimestamp(docx_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
-    images_dir = output_dir / f"image_{code.replace('-', '_')}"
-    images_dir.mkdir(parents=True, exist_ok=True)
 
+# Définition du chemin de log pour ce fichier
+    log_path = output_dir / "log" / f"log_{code}.txt"
+    log_path.parent.mkdir(parents=True, exist_ok=True)  # S'assurer que le dossier existe
+
+
+    file_date = datetime.fromtimestamp(docx_path.stat().st_mtime).strftime("%Y-%m-%d %H:%M:%S")
+    images_dir = output_dir / "images"
     doc = Document(docx_path)
 
     # === EXTRACTION PHYSIQUE DES IMAGES ===
@@ -130,6 +134,34 @@ def convertir_docx_en_txt(docx_path: Path):
     image_counter = 1
     auteur = "MC"
 
+#    for para in doc.paragraphs:
+#        drawings = para._element.xpath('.//w:drawing')
+#        text = para.text.strip()
+#        has_image = bool(drawings)
+#
+#        block = ""
+#        if text:
+#            block += text
+#        if has_image:
+#            image_names_used.append(f"{nom_fichier}_image{image_counter:03}.png")
+#            blocs.append(block)
+## image_name déjà défini via image_hash_map
+#            if image_counter <= len(image_filenames_in_order):
+#                img_name_ref = image_filenames_in_order[image_counter - 1]
+#            else:
+#                img_name_ref = "image_inconnue.png"  # sécurité
+#
+#            blocs.append(f"#PICT{image_counter:03}# [image: {img_name_ref}]")
+#            print(f"📌 Balise image : {img_name_ref}")
+#            image_counter += 1
+#        elif text:
+#            blocs.append(block)
+#        else:
+#            blocs.append(text)
+
+
+    image_ref_index = 0  # 🆕 index pour suivre la position dans image_filenames_in_order
+
     for para in doc.paragraphs:
         drawings = para._element.xpath('.//w:drawing')
         text = para.text.strip()
@@ -138,21 +170,29 @@ def convertir_docx_en_txt(docx_path: Path):
         block = ""
         if text:
             block += text
+
         if has_image:
             image_names_used.append(f"{nom_fichier}_image{image_counter:03}.png")
             blocs.append(block)
-#            blocs.append(f"#PICT{image_counter:03}# [image: {image_name}]")
-#            print(f"📸 Image insérée : {image_name}")
 
-            # image_name déjà défini via image_hash_map
-            blocs.append(f"#PICT{image_counter:03}# [image: {img_name}]")
-            print(f"📌 Balise image : {img_name}")
+            # 🔁 Obtenir le bon nom d’image extrait
+            if image_ref_index < len(image_filenames_in_order):
+                img_name_ref = image_filenames_in_order[image_ref_index]
+            else:
+                img_name_ref = "image_inconnue.png"
+
+            blocs.append(f"#PICT{image_counter:03}# [image: {img_name_ref}]")
+
+            print(f"📌 Balise image : {img_name_ref}")
 
             image_counter += 1
+            image_ref_index += 1
+
         elif text:
             blocs.append(block)
         else:
             blocs.append(text)
+
 
     new_blocs = []
     skip_next = False
@@ -171,24 +211,94 @@ def convertir_docx_en_txt(docx_path: Path):
         new_blocs.append(ligne)
     blocs = new_blocs
 
+# Affichage complet de toutes les lignes lues depuis le document
+    print("\n=== 🧾 Contenu complet des blocs lus depuis le document ===")
+    for i, line in enumerate(blocs, 1):
+        print(f"{i:03} | {line}")
+    print("=== Fin des blocs ===\n")
+
+
+
+
     split_index = next((i for i, line in enumerate(blocs) if 'Herausforderung' in line), len(blocs))
     blocs_fr = blocs[:split_index]
-    blocs_de = [line for line in blocs[split_index:] if not line.strip().startswith('Herausforderung')]
+##    blocs_de = [line for line in blocs[split_index:] if not line.strip().startswith('Herausforderung')]
+##
+##    fr_header, fr_footer = get_struct("fr", nom_fichier, code, auteur, file_date)
+##    de_header, de_footer = get_struct("de", nom_fichier, code, auteur, file_date)
+##
+##    txt_path = output_dir / f"{nom_fichier}.txt"
+##    txt_path.write_text(
+##        "\n".join(fr_header + process_blocs(blocs_fr) + fr_footer + [""] +
+##                              de_header + process_blocs(blocs_de) + 
+##                              de_footer +
+##                                ["", "## Images"]
+##                    ),
+##        encoding="utf-8"
+##   )
+##    input("🔎 Pause — appuyez sur Entrée pour continuer...")
 
+
+    # === DÉCOUPAGE MULTILINGUE (FR / DE / IT) ===
+
+    # 🔍 Vérification de l'unicité des marqueurs
+    def check_unique_marker(blocs, marqueur, nom_fichier, log_path):
+        count = sum(1 for line in blocs if marqueur in line)
+        if count > 1:
+            print(f"❌ Erreur : le mot-clé '{marqueur}' apparaît {count} fois dans {nom_fichier}")
+            with open(log_path, "a", encoding="utf-8") as log:
+                log.write(f"{nom_fichier} : NOT OK - mot-clé '{marqueur}' apparaît {count} fois\n")
+            return False
+        return True
+
+    # Vérifications
+    if not check_unique_marker(blocs, "Herausforderung", nom_fichier, log_path):
+        return
+    if not check_unique_marker(blocs, "Sfida", nom_fichier, log_path):
+        return
+
+    # Indices de découpe
+    idx_de = next((i for i, line in enumerate(blocs) if 'Herausforderung' in line), len(blocs))
+    idx_it = next((i for i, line in enumerate(blocs) if 'Sfida' in line), len(blocs))
+
+    # Séparation des blocs
+    blocs_fr = blocs[:idx_de]
+    blocs_de = blocs[idx_de:idx_it] if idx_de < idx_it else []
+    blocs_it = blocs[idx_it:] if idx_it < len(blocs) else []
+
+    # Nettoyage des marqueurs
+    blocs_de = [line for line in blocs_de if not line.strip().startswith('Herausforderung')]
+    blocs_it = [line for line in blocs_it if not line.strip().startswith('Sfida')]
+
+    # Réinitialisation du compteur à chaque langue
+    image_counter = 1
     fr_header, fr_footer = get_struct("fr", nom_fichier, code, auteur, file_date)
-    de_header, de_footer = get_struct("de", nom_fichier, code, auteur, file_date)
+    bloc_fr = fr_header + process_blocs(blocs_fr) + fr_footer + [""]
 
+    if blocs_de:
+        image_counter = 1
+        de_header, de_footer = get_struct("de", nom_fichier, code, auteur, file_date)
+        bloc_de = de_header + process_blocs(blocs_de) + de_footer + [""]
+    else:
+        bloc_de = []
+
+    if blocs_it:
+        image_counter = 1
+        it_header, it_footer = get_struct("it", nom_fichier, code, auteur, file_date)
+        bloc_it = it_header + process_blocs(blocs_it) + it_footer + [""]
+    else:
+        bloc_it = []
+
+    # Écriture du fichier final
     txt_path = output_dir / f"{nom_fichier}.txt"
     txt_path.write_text(
-        "\n".join(fr_header + process_blocs(blocs_fr) + fr_footer + [""] +
-                              de_header + process_blocs(blocs_de) + 
-                              de_footer +
-                                ["", "## Images"]
-                    ),
+        "\n".join(bloc_fr + bloc_de + bloc_it + ["## Images"]),
         encoding="utf-8"
     )
 
     input("🔎 Pause — appuyez sur Entrée pour continuer...")
+
+##
 
     log_path = log_dir / f"{nom_fichier}.log"
     with open(log_path, "w", encoding="utf-8") as logf:
@@ -320,10 +430,23 @@ with open(global_log, "w", encoding="utf-8") as f:
         nom = convertir_docx_en_txt(fichier)
         f.write(f"{nom} : OK\n")
 
-print("=== Résultat du traitement ===")
-for fichier in files:
-    try:
-        nom = convertir_docx_en_txt(fichier)
-        print(f"{nom} : OK")
-    except Exception as e:
-        print(f"{fichier.stem} : NOT OK - {str(e)}")
+# print("=== Résultat du traitement ===")
+# for fichier in files:
+#    try:
+#        nom = convertir_docx_en_txt(fichier)
+#        print(f"{nom} : OK")
+#    except Exception as e:
+#        print(f"{fichier.stem} : NOT OK - {str(e)}")
+
+# Boucle principale – traitement de tous les fichiers .docx
+fichiers = list(input_dir.glob("*.docx"))
+
+for fichier in fichiers:
+    print(f"🔄 Traitement : {fichier.name}")
+    nom = convertir_docx_en_txt(fichier)
+
+    if nom is None:
+        print(f"❌ Fichier ignoré suite à une erreur détectée : {fichier.name}")
+        continue  # Ne pas aller plus loin si erreur fatale
+
+    print(f"{nom} : OK")
