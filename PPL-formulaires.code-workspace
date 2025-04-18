@@ -1,0 +1,18 @@
+{
+    "folders": [
+        {
+            "path": "C:\\Dev\\PPL-formulaires"
+        }
+    ],
+    "settings": {
+        "terminal.integrated.cwd": "C:\\Dev\\PPL-formulaires",
+        "workbench.startupEditor": "none",
+        "workbench.editor.restoreViewState": true
+    },
+    "extensions": {
+        "recommendations": []
+    },
+    "files": {
+        "autoSave": "onWindowChange"
+    }
+}
