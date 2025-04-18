@@ -13,9 +13,11 @@ from docx.shared import Inches
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 # Répertoires dynamiques
-base_dir = Path(os.path.abspath(__file__)).parent
-INPUT_DIR = base_dir / "fichiers_tableaux_sources"
-OUTPUT_DIR = INPUT_DIR / "OUT"
+base_dir = Path(os.path.abspath(__file__)).resolve().parent.parent
+DATA_DIR = base_dir / "data"
+
+INPUT_DIR = DATA_DIR / "00docx_tab"
+OUTPUT_DIR = DATA_DIR / "01docx_lin_in"
 LOG_DIR = OUTPUT_DIR / "log"
 
 # Création des dossiers
