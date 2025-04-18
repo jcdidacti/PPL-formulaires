@@ -24,3 +24,5 @@ images/
 # === Fichiers système ===
 .DS_Store
 Thumbs.db
+# === Données de production centralisées ===
+data/
