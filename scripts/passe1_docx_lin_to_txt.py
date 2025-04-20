@@ -1,4 +1,3 @@
-
 # ==============================================================================
 # Script : passe1_docx_lin_to_txt_v2_73.py
 # Objectif : Traitement complet multilingue avec structure, Q/R, images et langue
@@ -15,14 +14,20 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 
 import subprocess
 
+import subprocess
+
 def get_git_version():
     try:
-        tag = subprocess.check_output(["git", "describe", "--tags"], stderr=subprocess.DEVNULL).decode().strip()
+        tag = subprocess.check_output(
+            ["git", "describe", "--tags", "--exact-match"],
+            stderr=subprocess.DEVNULL
+        ).decode().strip()
         return tag
     except Exception:
         return "non tagué"
 
 VERSION_SCRIPT = get_git_version()
+
 
 # === Configuration ===
 NB_LIGNES_DETECTION = 40
@@ -171,7 +176,7 @@ def process_docx(docx_path: Path):
 
         log_path = log_dir / f"{nom_fichier}.log"
         with open(log_path, "w", encoding="utf-8") as logf:
-            logf.write(f"# Log de traitement — passe1 v2.74\n")
+            logf.write(f"# Log de traitement —  passe1 (version : {VERSION_SCRIPT})\n")
             logf.write(f"# Fichier     : {nom_fichier}\n")
             logf.write(f"# Date        : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
             logf.write(f"# Résultat    : OK\n\n")
@@ -208,7 +213,7 @@ if __name__ == "__main__":
         process_docx(fichier)
 
     with open(global_log_path, "w", encoding="utf-8") as f:
-        f.write("# Global log — passe1 (version : {VERSION_SCRIPT})\n")
+        f.write(f"# Global log — passe1 (version : {VERSION_SCRIPT})\n")
         f.write(f"# Run : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("# ===========================================\n")
         for entry in global_log_entries:
