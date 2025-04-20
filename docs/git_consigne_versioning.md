@@ -1,47 +1,57 @@
-# 📘 Consignes Git pour versionner les scripts PPL-formulaires
 
-## Convention de nommage
+# 📘 Consignes de versioning – Projet PPL-formulaires
 
-- Les scripts ont un **nom fixe** une fois stables :
-  - `passe0_docx_tab_to_lin.py`
-  - `passe1_docx_lin_to_txt.py`
-
-- Les versions sont tracées via des **tags Git** :
-  - `passe0-v1.02`, `passe0-v1.03`, etc.
-  - `passe1-v2.63`, `passe1-v2.64`, etc.
+Ce fichier contient les bonnes pratiques et commandes utiles pour suivre les versions des scripts, notamment ceux liés à la `passe1`.
 
 ---
 
-## Workflow recommandé
+## 🏷️ Convention de nommage des tags
 
-### Geler une version stable
+- `passe0-vX.XX` → transformation tableau → linéaire
+- `passe1-vX.XX` → transformation linéaire → .txt avec images
+- `session-YYYY-MM-DD-HHhMM` → sauvegarde ponctuelle manuelle
+
+---
+
+## ✅ Bonnes pratiques
+
+- Chaque version validée doit être copiée dans `passe1_docx_lin_to_txt.py`
+- Le tag correspondant doit être ajouté et pushé :
 
 ```bash
-git add scripts/passe0_docx_tab_to_lin.py
-git commit -m "Nouvelle version passe0"
-git tag passe0-v1.03
+git add scripts/passe1_docx_lin_to_txt.py
+git commit -m "passe1 v2.69 – gestion des images - version beta"
+git tag passe1-v2.69
 git push
-git push origin passe0-v1.03
-```
-
-### Revenir à une version spécifique
-
-```bash
-git checkout passe0-v1.02 -- scripts/passe0_docx_tab_to_lin.py
+git push origin passe1-v2.69
 ```
 
 ---
 
-## Voir l'historique des versions d'un script
+## 🔍 Vérification de l’historique des versions `passe1-v*.*`
 
+### 1. Lister tous les tags `passe1-v*.*` triés par date
 ```bash
-python scripts/list_versions.py passe0
+git tag --list "passe1-v*.*" --sort=taggerdate
 ```
 
-## Autres commandes utiles
-
+### 2. Voir les messages de commit associés à chaque tag
 ```bash
-git tag --list           # voir tous les tags
-git show passe0-v1.03    # voir le contenu exact d’un tag
-git log -- scripts/passe0_docx_tab_to_lin.py  # historique complet
+for t in $(git tag --list "passe1-v*.*" --sort=taggerdate); do
+    git show $t --no-patch --oneline
+done
 ```
+
+### 3. Rechercher tous les commits contenant "passe1" dans leur message
+```bash
+git log --oneline --grep="passe1"
+```
+
+### 4. Voir les commits et leurs tags (vue synthétique)
+```bash
+git log --oneline --decorate
+```
+
+---
+
+📌 Pensez à garder ce fichier à jour en cas d'ajout d'autres branches de développement.

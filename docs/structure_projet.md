@@ -19,8 +19,9 @@
 /scripts/
 ├── passe0_docx_tab_to_lin.py              # transformation tableau vers linéaire
 ├── passe1_docx_lin_to_txt.py              # version officielle actuelle avec images et balises
-├── compare_files.py                       # compare deux fichiers Python
+├── passe1_docx_lin_to_txt_multilingue0.py # version expérimentale pour traitement multilingue
 ├── list_versions.py                       # affiche les tags Git par script
+├── compare_files.py                       # compare deux scripts ligne par ligne
 ```
 
 ## 📄 Répertoire `docs/` (documentation du projet)
@@ -38,10 +39,72 @@
 ```
 
 ## 💡 Sauvegarde de la documentation
-Commande à exécuter pour versionner tous les fichiers .md :
+
+Commande à exécuter pour versionner tous les fichiers `.md` de la documentation :
 
 ```bash
 git add docs/*.md
 git commit -m "Mise à jour de la documentation"
 git push
 ```
+
+---
+
+## ✅ Passe 0 : `passe0_docx_tab_to_lin.py`
+
+### 📄 Emplacement du script :
+```
+<base>/scripts/passe0_docx_tab_to_lin.py
+```
+
+### 📥 Lecture :
+```
+<base>/data/00docx_tab/
+→ Fichiers .docx d’origine sous forme de tableaux (documents bruts)
+```
+
+### 📤 Écriture :
+```
+<base>/data/01docx_lin_in/
+→ Fichiers .docx linéarisés (conversion automatique depuis tableaux)
+
+<base>/data/01docx_lin_in/log/
+→ Logs de traitement associés aux fichiers linéarisés
+```
+
+### Remarques :
+- Tous les chemins sont relatifs à la racine du projet (`<base>`)
+- La structure est conçue pour faciliter l’automatisation, le versionnage, et la lisibilité
+- Le dossier `data/` centralise toutes les données de travail
+
+---
+
+## ✅ Passe 1 : `passe1_docx_lin_to_txt.py`
+
+### 📄 Emplacement du script :
+```
+<base>/scripts/passe1_docx_lin_to_txt.py
+```
+
+### 📥 Lecture :
+```
+<base>/data/02docx_lin_out/
+→ Fichiers .docx linéaires revus manuellement (préparés pour extraction de contenu)
+```
+
+### 📤 Écriture :
+```
+<base>/data/02text_p1_out/
+→ Fichiers texte `.txt` générés automatiquement depuis les fichiers .docx
+
+<base>/data/02text_p1_out/images/
+→ Images extraites des fichiers docx (référencées dans les textes)
+
+<base>/data/02text_p1_out/log/
+→ Journaux de traitement de passe1 (résumés, erreurs, diagnostics)
+```
+
+### Remarques :
+- Cette passe effectue l'extraction structurée du contenu linéaire + des images
+- Les fichiers générés seront utilisés dans les passes suivantes pour reformulation, syntaxe, etc.
+- Tous les chemins sont relatifs à la racine du projet, regroupés dans `data/`
