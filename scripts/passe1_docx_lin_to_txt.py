@@ -1,7 +1,7 @@
 
 # ==============================================================================
-# Script : passe1_docx_lin_to_txt_v2_60.py
-# Objectif : version stable avec balises Q/A et log global
+# Script : passe1_docx_lin_to_txt_v2_69e.py
+# Objectif : Gérer plusieurs images dans un même paragraphe (rel_id multiples)
 # Date : 2025-04-20
 # ==============================================================================
 
@@ -33,7 +33,7 @@ def get_struct(nom_fichier, code, auteur):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     header = [
         "## Identification",
-        f"#Script : passe1_docx_lin_to_txt_v2_60.py",
+        f"#Script : passe1_docx_lin_to_txt_v2_69e.py",
         f"#Run at : {now}",
         f"#ID file : {nom_fichier}",
         f"ID        {code}",
@@ -58,7 +58,6 @@ def get_struct(nom_fichier, code, auteur):
     ]
     return header, footer
 
-# === TRAITEMENT PRINCIPAL ===
 def process_docx(docx_path: Path):
     nom_fichier = docx_path.stem
     code = "-".join(nom_fichier.split("-")[:3])
@@ -70,33 +69,37 @@ def process_docx(docx_path: Path):
     doc = Document(docx_path)
 
     image_hash_map = {}
+    image_hash_index = {}
+    relid_to_hash = {}
     image_counter = 1
     bloc_texte = []
 
-    # ========== Extraction unique des images ==========
-    for rel in doc.part._rels.values():
-        if rel.reltype == RT.IMAGE:
-            img_data = rel.target_part.blob
-            img_hash = md5(img_data).hexdigest()
-            if img_hash not in image_hash_map:
-                ext = rel.target_part.content_type.split("/")[-1]
-                img_name = f"{code}_image{image_counter:03}.{ext}"
-                img_path = image_dir / img_name
-                with open(img_path, "wb") as f:
-                    f.write(img_data)
-                image_hash_map[img_hash] = img_name
-                image_counter += 1
-
-    image_counter = 1
-    image_list = list(image_hash_map.values())
-
     try:
+        print("📥 Extraction des images...")
+        for rel_id, rel in doc.part._rels.items():
+            if rel.reltype == RT.IMAGE:
+                img_data = rel.target_part.blob
+                img_hash = md5(img_data).hexdigest()
+                relid_to_hash[rel_id] = img_hash
+                if img_hash not in image_hash_map:
+                    ext = rel.target_part.content_type.split("/")[-1]
+                    img_name = f"{code}_image{image_counter:03}.{ext}"
+                    img_path = image_dir / img_name
+                    with open(img_path, "wb") as f:
+                        f.write(img_data)
+                    image_hash_map[img_hash] = img_name
+                    image_hash_index[img_hash] = image_counter
+                    print(f"✅ Image enregistrée : {img_name}")
+                    image_counter += 1
+                else:
+                    print(f"🔁 Image déjà connue : {image_hash_map[img_hash]}")
+
+        print("📄 Lecture des paragraphes...")
         for para in doc.paragraphs:
             drawings = para._element.xpath('.//w:drawing')
             text = para.text.strip()
             has_image = bool(drawings)
 
-            # Détection auteur
             if "défi" in text.lower() and "|" in text:
                 parts = text.split("|")
                 if len(parts) == 2 and parts[1].strip():
@@ -113,32 +116,41 @@ def process_docx(docx_path: Path):
                 bloc_texte.append(text)
 
             if has_image:
-                img_name = image_list[image_counter - 1] if image_counter <= len(image_list) else "image_inconnue.png"
-                bloc_texte.append(f"#PICT{image_counter:03}# [image: {img_name}]")
-                image_counter += 1
+                rels = para._element.xpath('.//a:blip/@r:embed')
+                for rel_id in rels:
+                    img_hash = relid_to_hash.get(rel_id, None)
+                    if img_hash and img_hash in image_hash_map:
+                        img_name = image_hash_map[img_hash]
+                        img_index = image_hash_index[img_hash]
+                        bloc_texte.append(f"#PICT{img_index:03}# [image: {img_name}]")
+                        print(f"🖋️ Insertion : #PICT{img_index:03}# [image: {img_name}]")
+                    else:
+                        bloc_texte.append("#PICT000# [image: image_inconnue.png]")
+                        print(f"⚠️ Image inconnue pour rel_id {rel_id}")
 
         header, footer = get_struct(nom_fichier, code, auteur)
         final_content = header + bloc_texte + footer + ["", "## Images"]
 
         txt_path = output_dir / f"{nom_fichier}.txt"
         txt_path.write_text("\n".join(final_content), encoding="utf-8")
+        print(f"✅ Fichier écrit : {txt_path}")
 
         log_path = log_dir / f"{nom_fichier}.log"
         with open(log_path, "w", encoding="utf-8") as logf:
-            logf.write(f"# Script : passe1_docx_lin_to_txt_v2_60.py\n")
+            logf.write(f"# Script : passe1_docx_lin_to_txt_v2_69e.py\n")
             logf.write(f"# Execution Time : {timestamp}\n")
             logf.write(f"# File processed : {docx_path.name}\n")
             logf.write(f"# Paragraphs : {len(doc.paragraphs)}\n")
-            logf.write(f"# Images extraites : {len(image_list)}\n")
+            logf.write(f"# Images extraites : {len(image_hash_map)}\n")
 
         global_log_entries.append(f"{nom_fichier} : OK")
         return True
 
     except Exception as e:
+        print(f"❌ Erreur : {e}")
         global_log_entries.append(f"{nom_fichier} : NOT OK - {e}")
         return False
 
-# === BOUCLE PRINCIPALE ===
 if __name__ == "__main__":
     fichiers = list(input_dir.glob("*.docx"))
     for fichier in fichiers:
@@ -147,9 +159,8 @@ if __name__ == "__main__":
             continue
         process_docx(fichier)
 
-    # Log global
     with open(global_log_path, "w", encoding="utf-8") as f:
-        f.write("# Global log — passe1 v2.60\n")
+        f.write("# Global log — passe1 v2.69e\n")
         f.write(f"# Run : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write("# ===========================================\n")
         for entry in global_log_entries:
