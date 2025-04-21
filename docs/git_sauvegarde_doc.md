@@ -23,6 +23,16 @@ git push
 
 ---
 
+## ✅ Résumé
+
+git add docs/*.md
+
+git commit -m "Mise à jour documentation – structure_projet, suivi, etc."
+
+git push
+
+---
+
 ## 🔖 Créer un tag spécifique pour une version de documentation
 
 ### 4. Ajouter un tag :
