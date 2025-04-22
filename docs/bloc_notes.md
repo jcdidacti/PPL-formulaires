@@ -12,6 +12,8 @@ Ce document sert de carnet de bord personnel pour noter les idées, pistes d'am�
 - [ ] Exemple : Ajouter un champ de révision automatique dans le `.docx`
 - [ ] Exemple : Intégrer une vérification orthographique dans la passe 2
 
+Ajouter une image 
+
 ---
 
 ## 🅱️ Section B — Améliorations à intégrer dans `workflow.md`
