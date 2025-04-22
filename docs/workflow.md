@@ -106,6 +106,75 @@ Ce document décrit l’ensemble du **flux de traitement** des questionnaires, d
 
 ---
 
+
+
+# 📘Workflow général du projet PPL-Formulaires
+
+Ce document décrit les grandes étapes du flux de traitement, de l’auteur à l’évaluation.
+
+
+
+---
+
+## 🔄 Vue d’ensemble du flux éditorial complet
+
+Cette section résume le **flux de transformation contrôlé** tel qu’imaginé dans le projet :
+
+```text
+1. Auteur édite :           DOCX linéaire source
+                            ↓ (Passe 1)
+2. Génération automatique : TXT structuré standardisé
+                            ↓ (Passe 2, optionnelle)
+3. Vérification syntaxique : détection d’erreurs, diagnostics
+                            ↓ (Passe 3)
+4. Génération des livrables : DOCX instructeur + DOCX élève
+```
+
+### 📌 Principes clés :
+
+- L’**édition se fait uniquement dans le fichier `.docx` source linéaire**
+- Le `.txt` généré est **automatique, intermédiaire et non modifié à la main**
+- La **passe 2** joue un rôle de **feedback** à l’auteur (mais ne modifie rien)
+- La **passe 3** produit les documents finaux, à partir d’un `.txt` validé
+- Ce flux permet de :
+  - Travailler proprement
+  - Réutiliser facilement les questions
+  - Assurer une traçabilité par versionnage
+
+
+---
+
+## 🔄 Vue d’ensemble du flux éditorial complet
+
+Cette section résume le **flux de transformation contrôlé** tel qu’imaginé dans le projet :
+
+```text
+1. Auteur édite :           DOCX linéaire source
+                            ↓ (Passe 1)
+2. Génération automatique : TXT structuré standardisé
+                            ↓ (Passe 2, optionnelle)
+3. Vérification syntaxique : détection d’erreurs, diagnostics
+                            ↓ (Passe 3)
+4. Génération des livrables : DOCX instructeur + DOCX élève
+```
+
+### 📌 Principes clés :
+
+- L’**édition se fait uniquement dans le fichier `.docx` source linéaire**
+- Le `.txt` généré est **automatique, intermédiaire et non modifié à la main**
+- La **passe 2** joue un rôle de **feedback** à l’auteur (mais ne modifie rien)
+- La **passe 3** produit les documents finaux, à partir d’un `.txt` validé
+- Ce flux permet de :
+  - Travailler proprement
+  - Réutiliser facilement les questions
+  - Assurer une traçabilité par versionnage
+
+
+
+
+
+
+
 ## ⚠️ Difficultés potentielles à anticiper
 
 | Problème possible                             | Solution ou précaution                                                  |
