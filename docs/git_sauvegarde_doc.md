@@ -26,9 +26,7 @@ git push
 ## ✅ Résumé
 
 git add docs/*.md
-
 git commit -m "Mise à jour documentation – structure_projet, suivi, etc."
-
 git push
 
 ---
