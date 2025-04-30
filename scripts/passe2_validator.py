@@ -1,3 +1,9 @@
+# ============================================================================
+# Script : passe2_validator.py (v1.04-dev)
+# Objectif : Valider la structure par langue avec détection réelle des lignes ID/Version/Date/Auteur
+# Date : 2025-04-30
+# ============================================================================
+
 import re
 from pathlib import Path
 from datetime import datetime
@@ -30,21 +36,45 @@ def analyser_fichier(path_txt: Path):
     for i, ligne in enumerate(lines):
         num = i + 1
         ligne_strip = ligne.strip()
+        print(f"-- ligne {num:03}: {ligne_strip}")
+        print(f"-- ligne {num:03}: {ligne_strip}")
         ligne_annot = f"{num:04} | {ligne}"
 
         if balise_id.match(ligne_strip):
+            # Vérifier les 4 lignes suivantes obligatoires avant les infos de langue
+            expected_headers = [("#Script", "#Script"), ("#Run at", "#Run at"), ("#ID file", "#ID file"), ("##LANG-", "##LANG")]
+            for offset, (expected_prefix, label) in enumerate(expected_headers):
+                if i + offset + 1 >= len(lines) or not lines[i + offset + 1].strip().startswith(expected_prefix):
+                    message = f"Ligne attendue : {label}"
+                message = f"Ligne attendue : {label}"
+                print(f"!! ERREUR [Ligne {i + offset + 2:03}]: {message}")
+                erreurs.append((i + offset + 2, message))
             phase = "ID"
             bloc_langue_en_cours = False
-            id_block = lines[i+1:i+5]
-            for j, expected in enumerate(ident_keys):
-                if j >= len(id_block) or not id_block[j].strip().startswith(expected):
-                    erreurs.append((i + j + 2, f"Ligne attendue : {expected}"))
+            print(f">> Début bloc Identification détecté à la ligne {num}")
+            # Chercher dynamiquement les 4 lignes suivantes avec les balises attendues
+            found = {key: False for key in ident_keys}
+            for j in range(1, 10):  # limite de sécurité
+                if i + j >= len(lines):
+                    break
+                ligne_suivante = lines[i + j].strip()
+                ligne_num = i + j + 1
+                for key in ident_keys:
+                    if ligne_suivante.startswith(key):
+                        found[key] = True
+            for key in ident_keys:
+                if not found[key]:
+                    message = f"Ligne attendue (dans les suivantes) : {key}"
 
         elif balise_lang.match(ligne_strip):
             if bloc_langue_en_cours and not work_stop_present:
-                erreurs.append((num, "##LANG trouvé alors que le bloc précédent n'est pas terminé par ## Work Stop"))
+                message = "##LANG trouvé alors que le bloc précédent n'est pas terminé par ## Work Stop"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             if phase != "ID":
-                erreurs.append((num, "Balise ##LANG trouvée sans ## Identification avant"))
+                message = "Balise ##LANG trouvée sans ## Identification avant"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             phase = "LANG"
             bloc_langue_en_cours = True
             en_attente_de_A = False
@@ -52,22 +82,32 @@ def analyser_fichier(path_txt: Path):
 
         elif balise_q.match(ligne_strip):
             if not bloc_langue_en_cours:
-                erreurs.append((num, "#Q rencontré hors bloc de langue"))
+                message = "#Q rencontré hors bloc de langue"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             if en_attente_de_A:
-                erreurs.append((num, "#Q rencontré alors qu'une question précédente n'a pas de #A"))
+                message = "#Q rencontré alors qu'une question précédente n'a pas de #A"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             en_attente_de_A = True
 
         elif balise_a.match(ligne_strip):
             if not en_attente_de_A:
-                erreurs.append((num, "#A rencontré sans question #Q préalable"))
+                message = "#A rencontré sans question #Q préalable"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             en_attente_de_A = False
 
         elif balise_stop.match(ligne_strip):
             if not bloc_langue_en_cours:
-                erreurs.append((num, "## Work Stop rencontré hors bloc de langue"))
+                message = "## Work Stop rencontré hors bloc de langue"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             work_stop_present = True
             if en_attente_de_A:
-                erreurs.append((num, "## Work Stop trouvé alors qu'une question n'a pas de réponse"))
+                message = "## Work Stop trouvé alors qu'une question n'a pas de réponse"
+                print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+                erreurs.append((num, message))
             bloc_langue_en_cours = False
             phase = "STOP"
 
@@ -78,7 +118,9 @@ def analyser_fichier(path_txt: Path):
         annotations.append(ligne_annot)
 
     if not end_form_present:
-        erreurs.append((len(lines), "Balise ## End of Form absente"))
+        message = "Balise ## End of Form absente"
+        print(f"!! ERREUR [Ligne {len(lines):03}]: {message}")
+        erreurs.append((len(lines), message))
 
     nom_base = path_txt.stem
     output_path = output_dir / f"{nom_base}.annotated.txt"
