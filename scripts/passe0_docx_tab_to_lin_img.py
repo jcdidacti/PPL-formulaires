@@ -13,7 +13,9 @@ from docx.shared import Inches
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from datetime import datetime
 
-SCRIPT_VERSION = "v2.04"
+#Étape 1. Initialisation des chemins et constante
+
+SCRIPT_VERSION = "v2.10"
 
 base_dir = Path(__file__).resolve().parent.parent
 DATA_DIR = base_dir / "data"
@@ -50,6 +52,9 @@ def cell_contient_image(cell):
     for paragraph in cell._element.xpath(".//w:drawing | .//w:pict"):
         return True
     return False
+
+#Étape 2. Extraction des images depuis les cellules
+# appelé par la fonction "transformer_tableau_et_images"
 
 def extraire_images_des_cellules(doc, image_dir, prefix):
     images = []
@@ -101,96 +106,53 @@ def transformer_tableau_et_images(doc_path):
     langues_traitees = set()
     langue = None
     lignes_out = []
-    
-#    print("=== TEST POINT 1===")
-
-    # Prétraitement Q/A : restructuration lisible
-    lignes_reformatees = []
-    for ligne in lignes_out:
-        if "#Q" in ligne and "|" in ligne:
-            parts = ligne.split("|", 1)
-            q_part = parts[0].strip()
-            q_texte_raw = q_part[q_part.find("#Q") + 2:].strip()
-            q_texte = q_texte_raw.lstrip("#").strip()
-            lignes_reformatees.append("#Q########################################################")
-            lignes_reformatees.append(q_texte)
-            a_part = parts[1].strip()
-            if a_part.startswith("#A") and "-" in a_part:
-                a_texte = a_part[a_part.find("#A") + 2:].lstrip("-").strip()
-                lignes_reformatees.append("")
-                lignes_reformatees.append("#A-----------------------------------------------------------------------------------")
-                lignes_reformatees.append(a_texte)
-            else:
-                print(f"[⚠️  WARN] Ligne avec #Q mais #A malformé : {ligne}")
-                lignes_reformatees.append(parts[1].strip())
-        else:
-            lignes_reformatees.append(ligne)
-
-        # === Insertion automatique des balises Q/A si absentes ===
-        if '|' in ligne:
-            print("[DEBUG] '|' in ligne:\n")
-
-            colonne_gauche = row.cells[0].text.strip()
-            colonne_droite = row.cells[1].text.strip()
-            if not colonne_gauche.startswith("#Q") and not colonne_droite.startswith("#A"):
-                question_nettoyee = colonne_gauche.strip()
-                reponse_nettoyee = colonne_droite.strip()
-                ligne_qa = f"#Q####### {question_nettoyee} | #A------- {reponse_nettoyee}"
-                lignes_out[-1] = ligne_qa  # remplace la ligne brute
-                print(f"[AUTO-QA] Balises insérées automatiquement à la ligne {len(lignes_out)-1}: {ligne_qa[:80]}...")
-
-    lignes_out = lignes_reformatees
-
-    doc_out = Document()
-    previous_blank = False
 
 #Extraction des images du tableau
     images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR, prefix)
 
-# Etape 4 pour chaque table
+# pour chaque table
     for table_idx, table in enumerate(doc.tables):
+        print(f"[DEBUG] → Tableau {table_idx+1} : {len(table.rows)} lignes, {len(table.columns)} colonnes")
+       
+#Étape 3 Transformation du tableau en texte linéaire
 
-#extraction des contenus des cellules
+        total_rows = len(table.rows)
+
+# ========== Détection de langue à partir de la ligne 0 ==========
+        ligne_0 = " | ".join([cell.text.strip() for cell in table.rows[0].cells])
+
+        if ligne_0.startswith("Défi") and 'fr' not in langues_traitees:
+            langue = 'fr'
+            lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
+            entete_inseree = True
+            bloc_langue_actif = True
+            langues_traitees.add(langue)
+            print("[DEBUG] Bloc français détecté par la ligne 0")
+
+        elif ligne_0.startswith("Herausforderung") and 'de' not in langues_traitees:
+            langue = 'de'
+            lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
+            entete_inseree = True
+            bloc_langue_actif = True
+            langues_traitees.add(langue)
+            print("[DEBUG] Bloc allemand détecté par la ligne 0")
+
         for row_idx, row in enumerate(table.rows):
+
+    # On ignore systématiquement la première ligne (ligne 0) et la dernière (ligne n-1)
+            if row_idx == 0 or row_idx == total_rows - 1:
+                continue
+
             cellules = [cell.text.strip() for cell in row.cells]
             ligne = " | ".join(cellules).strip()
+            print(f"[DEBUG] Ligne {row_idx:02d} du tableau : {ligne}")
+
             if not ligne and (table_idx + 1, row_idx + 1, 'Q') not in images_par_cellule and (table_idx + 1, row_idx + 1, 'R') not in images_par_cellule:
                 continue
 
             ligne = re.sub(r'\n{2,}', '\n', ligne)  # Réduire les sauts multiples à un seul
 
-            if ligne.startswith("Défi |"):
-                langue = 'fr'
-                if langue in langues_traitees:
-                    bloc_langue_actif = False
-                    continue
-                langues_traitees.add(langue)
-                lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
-                entete_inseree = True
-                bloc_langue_actif = True
-                continue
-
-            if ligne.startswith("Herausforderung |"):
-                langue = 'de'
-                if langue in langues_traitees:
-                    bloc_langue_actif = False
-                    continue
-                langues_traitees.add(langue)
-                lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
-                entete_inseree = True
-                bloc_langue_actif = True
-                continue
-
             if not bloc_langue_actif:
-                continue
-
-            if 'Temps passé à ce défi' in ligne or 'Für diese Herausforderung aufgewendete Zeit' in ligne:
-                if entete_inseree:
-                    lignes_out.append('##Work End')
-                    lignes_out.append('')
-                    if langue == 'fr':
-                        lignes_out.append('[PAGEBREAK]')
-                bloc_langue_actif = False
                 continue
 
             lignes_out.append(ligne)
@@ -200,17 +162,40 @@ def transformer_tableau_et_images(doc_path):
                 print(f"[TRACE-RC] {repere_cellule}")
                 lignes_out.append(repere_cellule)
 
+# ========== Fin de bloc : fermeture structurée ==========
+        if bloc_langue_actif:
+            lignes_out.append('##Work End')
+            lignes_out.append('')
+            if langue == 'fr':
+                lignes_out.append('[PAGEBREAK]')
+            bloc_langue_actif = False
+            print(f"[INFO] Fin du bloc langue '{langue}' : ##Work End et éventuel saut de page ajoutés.")
+
+
     lignes_out.append('')
     lignes_out.append('##Form End')
 
-# Affichage des lignes pour inspection :
-    print("\n[DEBUG] Contenu des lignes_out (avant structuration Q/A) début :")
-    for i, ligne in enumerate(lignes_out):
-        print(f"[{i:03d}] {ligne}")
-    print("[DEBUG] Fin des lignes_out\n")
+    lignes_reformatees = []
+    for ligne in lignes_out:
+        if "|" in ligne and not ligne.startswith("#Q") and "#A" not in ligne:
+            q_raw, a_raw = map(str.strip, ligne.split("|", 1))
+            ligne_balisée = f"#Q####### {q_raw} | #A------- {a_raw}"
+            lignes_reformatees.append(ligne_balisée)
+            print(f"[AUTO] Balises Q/A ajoutées automatiquement : {ligne_balisée[:80]}...")
+        else:
+            lignes_reformatees.append(ligne)
+    lignes_out = lignes_reformatees
 
+    doc_out = Document()
+    previous_blank = False
+# Export de l'état de lignes_out avant structuration Q/A
 
-# Etape 5 === Structuration des blocs Q/A pour le document linéaire ===
+    with open(LOG_DIR / f"{prefix}_av_struct_{SCRIPT_VERSION}.txt", "w", encoding="utf-8") as f:
+        for i, ligne in enumerate(lignes_out):
+            f.write(f"[{i:03d}] {ligne}\n")
+    print(f"[LOG] État brut exporté dans : {LOG_DIR / f'{prefix}_av_struct_{SCRIPT_VERSION}.txt'}")
+
+#### Étape 4. Structuration des blocs Q/A
     lignes_reformatees = []
     ligne_idx = 0
     while ligne_idx < len(lignes_out):
@@ -262,6 +247,8 @@ def transformer_tableau_et_images(doc_path):
 
     lignes_out = lignes_reformatees
   
+
+  #Étape 5. Génération du document linéaire final (.docx)
     # === Insertion dans le document final avec images aux bons endroits ===
     ligne_idx = 0
     while ligne_idx < len(lignes_out):
