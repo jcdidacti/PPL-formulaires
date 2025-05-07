@@ -16,7 +16,7 @@ from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.11"
+SCRIPT_VERSION = "v2.12"
 
 base_dir = Path(__file__).resolve().parent.parent
 DATA_DIR = base_dir / "data"
@@ -99,6 +99,49 @@ def extraire_images_des_cellules(doc, image_dir, prefix):
 #    return images
     return images_par_cellule
 
+def extraire_et_inserer_refbak(q_texte, a_texte, prefix_branche, erreurs, avertissements):
+    """
+    Recherche les balises #BAK ... BAK# dans q_texte et a_texte,
+    extrait les références BAK (avec préfixe branche), les supprime du texte,
+    et retourne (liste_refs, texte_q_nettoyé, texte_a_nettoyé)
+    """
+    refs = []
+    balise_ouverte = False
+    pattern = r"#BAK(.*?)BAK#"
+    
+    print("[TRACE-BAK-IN] source :")
+    print("    [Q] ", q_texte.replace("\n", "⏎"))
+    print("    [A] ", a_texte.replace("\n", "⏎"))
+    for source, label in [(q_texte, "Q"), (a_texte, "A")]:
+        matches = re.findall(pattern, source)
+        if matches:
+            for match in matches:
+                cleaned = match.strip()
+                if cleaned:
+#                    ref_bak = f"BAK {prefix_branche}.{cleaned.split()[0]}"
+                    ref_bak = f"BAK {prefix_branche} [{cleaned}]"
+
+                    refs.append(ref_bak)
+            # nettoyage du texte
+            source_cleaned = re.sub(pattern, "", source).strip()
+        else:
+            source_cleaned = source
+            # vérifier les balises ouvertes non fermées
+            if "#BAK" in source and "BAK#" not in source:
+                erreurs.append(f"[ERROR] Balise #BAK sans fermeture dans le texte {label} : {source[:80]}...")
+            elif "BAK" in source:
+                avertissements.append(f"[WARN] Mention BAK sans balise dans le texte {label} : {source[:80]}...")
+
+        if label == "Q":
+            q_clean = source_cleaned
+        else:
+            a_clean = source_cleaned
+
+    refs_finales = sorted(set(refs))
+    print(f"[TRACE-BAK] Références extraites : {refs_finales}")
+    return refs_finales, q_clean.strip(), a_clean.strip()
+
+
 def transformer_tableau_et_images(doc_path):
     doc = Document(doc_path)
     nom_fichier = doc_path.name
@@ -111,6 +154,8 @@ def transformer_tableau_et_images(doc_path):
     lignes_out = []
     avertissements = []
     erreurs = []
+    branche_bak = prefix.split("-")[0]  # ex: '40' depuis '40-2-04'
+    print(f"[DEBUG] Branche BAK détectée depuis nom de fichier : {branche_bak}")
 
 #Extraction des images du tableau
     images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR, prefix)
@@ -200,7 +245,8 @@ def transformer_tableau_et_images(doc_path):
                 ligne_balisée = f"#Q####### {q_raw} | #A------- {a_raw}"
 
             lignes_reformatees.append(ligne_balisée)
-            print(f"[AUTO] Balises Q/A ajoutées automatiquement : {ligne_balisée[:80]}...")
+
+#            print(f"[AUTO] Balises Q/A ajoutées automatiquement : {ligne_balisée[:80]}...")
         else:
             lignes_reformatees.append(ligne)
 
@@ -286,13 +332,20 @@ def transformer_tableau_et_images(doc_path):
             repere_q = lignes_out[ligne_idx + 1].strip() if ligne_idx + 1 < len(lignes_out) else ""
             repere_r = lignes_out[ligne_idx + 2].strip() if ligne_idx + 2 < len(lignes_out) else ""
 
+#2.12       # Extraire les références BAK et nettoyer les textes
+            refs_bak, q_texte, a_texte_raw = extraire_et_inserer_refbak(q_texte, a_texte_raw, branche_bak, erreurs, avertissements)
+
             # Insertion de la question
             lignes_reformatees.extend([
-                "", "", "#Q########################################################"
-            ])
+                "", "", "#Q########################################################"])
 
             if repere_q.startswith("#RC_") and repere_q.endswith("_Q"):
                 lignes_reformatees.append(repere_q)
+
+#2.12       #insertion du texte des références BAK
+            lignes_reformatees.append("")
+            if refs_bak:
+                lignes_reformatees.append(f"@RefBAK: {', '.join(refs_bak) if refs_bak else ''}")
 
             lignes_reformatees.extend(["", "", "", q_texte])
 
@@ -390,6 +443,8 @@ def transformer_tableau_et_images(doc_path):
                 log.write(f"{err}\n")
 
     statut_global = "NOT OK" if erreurs else ("Warning" if avertissements else "OK")
+    print(f"[INFO] Fichier de sortie généré : {output_path}")
+    print(f"[INFO] Log sauvegardé dans : {log_file}")
     return nom_fichier, statut_global, erreurs, avertissements
 
 # Exécution principale
@@ -408,6 +463,8 @@ for file in files:
         global_log.append((file.name, statut))
         print(f"{file.name} : {statut}")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         global_log.append((file.name, f"ERROR: {str(e)}"))
         print(f"{file.name} : ERROR")
 
