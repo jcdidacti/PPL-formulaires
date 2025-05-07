@@ -12,10 +12,11 @@ from docx import Document
 from docx.shared import Inches
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from datetime import datetime
+from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.10"
+SCRIPT_VERSION = "v2.11"
 
 base_dir = Path(__file__).resolve().parent.parent
 DATA_DIR = base_dir / "data"
@@ -47,6 +48,7 @@ def generer_entete(langue, id_code, nom_fichier):
         '',
         '##Work Start'
     ]
+
 
 def cell_contient_image(cell):
     for paragraph in cell._element.xpath(".//w:drawing | .//w:pict"):
@@ -94,7 +96,8 @@ def extraire_images_des_cellules(doc, image_dir, prefix):
     for cle, noms in images_par_cellule.items():
         print(f"  {cle} : {noms}")
 
-    return images
+#    return images
+    return images_par_cellule
 
 def transformer_tableau_et_images(doc_path):
     doc = Document(doc_path)
@@ -106,6 +109,8 @@ def transformer_tableau_et_images(doc_path):
     langues_traitees = set()
     langue = None
     lignes_out = []
+    avertissements = []
+    erreurs = []
 
 #Extraction des images du tableau
     images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR, prefix)
@@ -144,10 +149,11 @@ def transformer_tableau_et_images(doc_path):
                 continue
 
             cellules = [cell.text.strip() for cell in row.cells]
-            ligne = " | ".join(cellules).strip()
+            ligne = f"#LG{row_idx:03d} " + " | ".join(cellules).strip()
             print(f"[DEBUG] Ligne {row_idx:02d} du tableau : {ligne}")
 
             if not ligne and (table_idx + 1, row_idx + 1, 'Q') not in images_par_cellule and (table_idx + 1, row_idx + 1, 'R') not in images_par_cellule:
+                avertissements.append(f"Ligne vide ignorée (table {table_idx+1}, ligne {row_idx+1})")
                 continue
 
             ligne = re.sub(r'\n{2,}', '\n', ligne)  # Réduire les sauts multiples à un seul
@@ -179,11 +185,25 @@ def transformer_tableau_et_images(doc_path):
     for ligne in lignes_out:
         if "|" in ligne and not ligne.startswith("#Q") and "#A" not in ligne:
             q_raw, a_raw = map(str.strip, ligne.split("|", 1))
-            ligne_balisée = f"#Q####### {q_raw} | #A------- {a_raw}"
+
+            # 🔍 Vérifier si un tag #LGnnn est présent dans la question
+            tag_lg = ""
+            if "#LG" in q_raw and q_raw.find("#LG") < 10:
+                lg_pos = q_raw.find("#LG")
+                tag_lg = q_raw[lg_pos:lg_pos+7]  # ex: #LG002
+                q_raw = q_raw.replace(tag_lg, "").strip()
+
+            # 🧱 Reconstruire proprement la ligne balisée
+            if tag_lg:
+                ligne_balisée = f"{tag_lg} #Q####### {q_raw} | #A------- {a_raw}"
+            else:
+                ligne_balisée = f"#Q####### {q_raw} | #A------- {a_raw}"
+
             lignes_reformatees.append(ligne_balisée)
             print(f"[AUTO] Balises Q/A ajoutées automatiquement : {ligne_balisée[:80]}...")
         else:
             lignes_reformatees.append(ligne)
+
     lignes_out = lignes_reformatees
 
     doc_out = Document()
@@ -198,8 +218,31 @@ def transformer_tableau_et_images(doc_path):
 #### Étape 4. Structuration des blocs Q/A
     lignes_reformatees = []
     ligne_idx = 0
+    langue_courante = "??"
+    ligne_locale = 0
+
     while ligne_idx < len(lignes_out):
-        ligne = lignes_out[ligne_idx]
+        ligne = lignes_out[ligne_idx].strip()
+
+#récupération no de ligne dans le tableau word
+        no_ligne_tab = -1
+        if "#LG" in ligne and ligne.find("#LG") < 10:
+            lg_pos = ligne.find("#LG")
+            if ligne[lg_pos+3:lg_pos+6].isdigit():
+                try:
+                    no_ligne_tab = int(ligne[lg_pos+3:lg_pos+6]) + 1
+                    print(f"[DEBUG ligne #LG] ligne tableau {no_ligne_tab} : {ligne}")
+                except:
+                    print(f"[WARN] Impossible d’extraire le numéro après #LG dans la ligne : {ligne}")
+
+        if ligne.startswith("##LANG-"):
+            langue_courante = ligne.replace("##LANG-", "").strip()
+            ligne_locale = 0
+            lignes_reformatees.append(ligne)
+            ligne_idx += 1
+            continue
+
+        ligne_locale += 1
 
         # Ligne structurée de type Q | A
         if "#Q" in ligne and "|" in ligne:
@@ -209,41 +252,62 @@ def transformer_tableau_et_images(doc_path):
             q_texte = q_texte_raw.lstrip("#").strip()
 
             a_part = parts[1].strip()
+            a_texte_raw = ""
+            if "#A" in a_part and "-" in a_part:
+                a_texte_raw = a_part[a_part.find("#A") + 2:].lstrip("-").strip()
+            else:
+                a_texte_raw = a_part.strip()
 
-            lignes_reformatees.extend([
-                "", "", "#Q########################################################", "", "", "", q_texte
-            ])
+            print(f"[DEBUG] q_texte vide = {not q_texte}, a_texte_raw vide = {not a_texte_raw}, no_ligne_tab = {no_ligne_tab}")
+
+            # ✅ Si question ET réponse sont vides, on saute ce bloc
+            if not q_texte and not a_texte_raw:
+                ligne_ref = f"ligne tableau {no_ligne_tab}" if no_ligne_tab >= 0 else f"ligne {ligne_locale}"
+                print(f"[INFO] Bloc Q/R vide ignoré ({ligne_ref})")
+                avertissements.append(f"[WARN] Bloc Q/R vide ignoré (langue {langue_courante}, {ligne_ref})")
+                ligne_idx += 3
+                continue
+
+#            # ❌ Si une seule des deux cellules est vide → erreur
+#            if (not q_texte and a_texte_raw) or (q_texte and not a_texte_raw):
+#                erreurs.append(f"Cellule vide seule (langue {langue_courante}, ligne {ligne_locale}) — {'Q manquante' if not q_texte else 'R manquante'}")
+
+            # ❌ Si une seule des deux cellules est vide → erreur
+            if (not q_texte and a_texte_raw) or (q_texte and not a_texte_raw):
+                if no_ligne_tab >= 0:
+                    ligne_ref = f"ligne tableau {no_ligne_tab}"
+                else:
+                    ligne_ref = f"ligne {ligne_locale}"
+                erreurs.append(f"[ERROR] Cellule vide seule (langue {langue_courante}, {ligne_ref}) — {'Q manquante' if not q_texte else 'R manquante'}")
+
+
 
             # Lire les repères Q/R sur les deux lignes suivantes
             repere_q = lignes_out[ligne_idx + 1].strip() if ligne_idx + 1 < len(lignes_out) else ""
             repere_r = lignes_out[ligne_idx + 2].strip() if ligne_idx + 2 < len(lignes_out) else ""
 
-            # Insérer repère Q après la question
+            # Insertion de la question
+            lignes_reformatees.extend([
+                "", "", "#Q########################################################"
+            ])
+
             if repere_q.startswith("#RC_") and repere_q.endswith("_Q"):
                 lignes_reformatees.append(repere_q)
 
-            # Ligne de début de réponse
+            lignes_reformatees.extend(["", "", "", q_texte])
+
             lignes_reformatees.extend(["", "#A-----------------------------------------------------------------------------------"])
 
-            # Insérer repère R juste après #A...
             if repere_r.startswith("#RC_") and repere_r.endswith("_R"):
                 lignes_reformatees.append(repere_r)
 
-            # Ajout du contenu de la réponse
-            lignes_reformatees.extend(["", ""])
-            if "#A" in a_part and "-" in a_part:
-                a_texte_raw = a_part[a_part.find("#A") + 2:].lstrip("-").strip()
-                lignes_reformatees.append(a_texte_raw)
-            else:
-                print(f"[⚠️  WARN] Ligne avec #Q mais #A malformé : {ligne}")
-                lignes_reformatees.append(a_part)
-
-            lignes_reformatees.append("")
+            lignes_reformatees.extend(["", "", a_texte_raw, ""])
             ligne_idx += 3  # Q/A + repères
 
         else:
             lignes_reformatees.append(ligne)
             ligne_idx += 1
+
 
     lignes_out = lignes_reformatees
   
@@ -251,7 +315,11 @@ def transformer_tableau_et_images(doc_path):
   #Étape 5. Génération du document linéaire final (.docx)
     # === Insertion dans le document final avec images aux bons endroits ===
     ligne_idx = 0
+    langue_courante = "??"
+    ligne_locale = 0
+
     while ligne_idx < len(lignes_out):
+        ligne_locale += 1
         ligne = lignes_out[ligne_idx]
         ligne_suivante = lignes_out[ligne_idx + 1] if ligne_idx + 1 < len(lignes_out) else ""
 
@@ -293,7 +361,36 @@ def transformer_tableau_et_images(doc_path):
     
     output_path = OUTPUT_DIR / nom_fichier
     doc_out.save(output_path)
-    return nom_fichier
+
+    from datetime import datetime
+
+    log_file = LOG_DIR / f"{prefix}_passe0_{SCRIPT_VERSION}.log"
+    with open(log_file, "w", encoding="utf-8") as log:
+        log.write(f"# Log de traitement — passe0 (version : {SCRIPT_VERSION})\n")
+        log.write(f"# Fichier     : {nom_fichier}\n")
+        log.write(f"# Date        : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        log.write(f"# Résultat    : OK\n\n")
+
+        log.write("## Langues détectées : " + ", ".join(langues_traitees) + "\n\n")
+        log.write("Langue   | Questions | Images\n")
+        log.write("-------- | ----------|--------\n")
+        nb_q_total = sum(1 for l in lignes_out if "#Q###" in l)
+        nb_img_total = sum(len(v) for v in images_par_cellule.values())
+        for lg in langues_traitees:
+            log.write(f"{lg:<8} | {nb_q_total:<10} | {nb_img_total}\n")
+
+        if avertissements:
+            log.write("\n## Avertissements :\n")
+            for warn in avertissements:
+                log.write(f"{warn}\n")
+
+        if erreurs:
+            log.write("\n## Erreurs :\n")
+            for err in erreurs:
+                log.write(f"{err}\n")
+
+    statut_global = "NOT OK" if erreurs else ("Warning" if avertissements else "OK")
+    return nom_fichier, statut_global, erreurs, avertissements
 
 # Exécution principale
 print("=== Informations sur les chemins ===")
@@ -303,6 +400,24 @@ print(f"Dossier de sortie         : {OUTPUT_DIR}")
 print(f"Fichiers .docx détectés   : {len(files)}")
 print("====================================\n")
 
+global_log = []
+
 for file in files:
-    result = transformer_tableau_et_images(file)
-    print(f"{file.name} : OK")
+    try:
+        nom_fichier, statut, erreurs, avertissements = transformer_tableau_et_images(file)
+        global_log.append((file.name, statut))
+        print(f"{file.name} : {statut}")
+    except Exception as e:
+        global_log.append((file.name, f"ERROR: {str(e)}"))
+        print(f"{file.name} : ERROR")
+
+from datetime import datetime
+
+global_log_path = LOG_DIR / f"log_global_passe0_{SCRIPT_VERSION}.log"
+with open(global_log_path, "w", encoding="utf-8") as g:
+    g.write(f"# Log global — passe0 (version : {SCRIPT_VERSION})\n")
+    g.write(f"# Date : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+    g.write("Fichier traité                          | Résultat\n")
+    g.write("---------------------------------------|----------\n")
+    for file_name, statut in global_log:
+        g.write(f"{file_name:<39} | {statut}\n")
