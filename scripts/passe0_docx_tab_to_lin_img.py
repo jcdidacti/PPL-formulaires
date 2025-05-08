@@ -16,7 +16,7 @@ from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.12"
+SCRIPT_VERSION = "v2.13"
 
 base_dir = Path(__file__).resolve().parent.parent
 DATA_DIR = base_dir / "data"
@@ -341,6 +341,8 @@ def transformer_tableau_et_images(doc_path):
 
             if repere_q.startswith("#RC_") and repere_q.endswith("_Q"):
                 lignes_reformatees.append(repere_q)
+                lignes_reformatees.append("@ImgSize: height_cm = 4")
+                print("[DEBUG] append @ImgSize _Q")
 
 #2.12       #insertion du texte des références BAK
             lignes_reformatees.append("")
@@ -353,6 +355,8 @@ def transformer_tableau_et_images(doc_path):
 
             if repere_r.startswith("#RC_") and repere_r.endswith("_R"):
                 lignes_reformatees.append(repere_r)
+                lignes_reformatees.append("@ImgSize: height_cm = 4")
+                print("[DEBUG] append @ImgSize _R")
 
             lignes_reformatees.extend(["", "", a_texte_raw, ""])
             ligne_idx += 3  # Q/A + repères
@@ -402,6 +406,34 @@ def transformer_tableau_et_images(doc_path):
             p.paragraph_format.line_spacing = 1
             previous_blank = False
 
+        elif ligne.strip().startswith("@ImgSize:"):
+            # Vérifier si une image a été insérée juste avant cette balise
+            if ligne_idx > 0 and lignes_out[ligne_idx - 1].startswith("#RC_"):
+                repere = lignes_out[ligne_idx - 1].strip()
+                try:
+                    _, t, r, qr = repere.split("_")
+                    cle_img = (int(t), int(r), qr)
+                    if cle_img in images_par_cellule:
+                        for nom_img in images_par_cellule[cle_img]:
+                            image_path = IMAGE_DIR / nom_img
+                            if image_path.exists():
+                                p = doc_out.add_paragraph()
+                                run = p.add_run()
+                                run.add_picture(str(image_path), height=Inches(4 / 2.54))
+                                print(f"[INFO] Image insérée pour {cle_img} : {nom_img}")
+                except Exception as e:
+                    print(f"[ERROR] Problème lors de l'insertion d'image pour repère {repere} : {e}")
+
+            # Affichage visuel de la balise ImgSize
+            p = doc_out.add_paragraph()
+            run = p.add_run(ligne.strip())
+            run.italic = True
+            from docx.shared import RGBColor
+            run.font.color.rgb = RGBColor(150, 150, 150)
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
+            previous_blank = False
 
         else:
             p = doc_out.add_paragraph(ligne.strip())
