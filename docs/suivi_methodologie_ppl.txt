@@ -1,0 +1,39 @@
+# 🧾 Suivi des décisions et actions — PPL-Formulaires (phase méthodologique)
+
+1. 📌 Décision de figer la passe 0 à la version v2.13
+   - Objectif atteint : génération d’un `.docx` linéaire avec balises et images.
+   - Insertion automatique des images depuis `images_par_cellule`
+   - Ajout systématique de `@ImgSize: height_cm = 4`
+   - Balises visibles dans le `.docx` (formaté italique gris)
+
+2. 🧩 Début de structuration méthodologique
+   - Validation d’un cycle projet en 5 étapes (décrit dans `ref_methodo.md`)
+   - Objectif : unifier les formats d’entrée et stabiliser les passes
+
+3. 📁 Adoption d’une documentation modulaire :
+   - Tous les fichiers de référence commencent par `ref_`
+   - Fichiers synthétiques : `ref_methodo.md`, `ref_passe0.md`, `ref_passe1.md`, etc.
+   - Fichiers détaillés par version : `ref_passe0_2.12.md`, `ref_passe0_2.13.md`
+
+4. 📘 Génération automatisée du référentiel :
+   - Script `build_referentiel.py` → assemble les fichiers `ref_*.md` (hors versions détaillées)
+   - Produit `ppl_process_global.md` (document unique consultable)
+
+5. 🛠️ Script Git simplifié :
+   - Script `git_push_docs.py` ajouté
+   - Permet de `add + commit + push` en une seule commande, quel que soit le contenu modifié
+
+6. 🔄 Logique de maintenance adoptée :
+   - Les fichiers synthétiques résument les fonctionnalités
+   - Les fichiers détaillés sont consultés en cas de besoin technique
+   - Aucune surcharge dans la génération principale
+
+7. ✅ Validation finale :
+   - Images bien insérées dans les `.docx`
+   - Balises `@ImgSize` affichées
+   - `@RefBAK:` gérée avec stabilité
+   - Fichier `ppl_process_global.md` généré sans surcharge
+
+---
+
+💬 À reprendre dans quelques jours à partir du script `build_referentiel.py` et du document `ppl_process_global.md`.
