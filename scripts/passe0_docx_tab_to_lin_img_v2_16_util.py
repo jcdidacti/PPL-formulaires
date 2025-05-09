@@ -17,7 +17,7 @@ from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.14"
+SCRIPT_VERSION = "v2.16"
 
 
 OUTPUT_DIR_0.mkdir(parents=True, exist_ok=True)

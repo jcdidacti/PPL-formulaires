@@ -17,7 +17,7 @@ from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.14"
+SCRIPT_VERSION = "v2.16"
 
 
 OUTPUT_DIR_0.mkdir(parents=True, exist_ok=True)
@@ -116,20 +116,6 @@ def extraire_et_inserer_refbak(q_texte, a_texte, prefix_branche, erreurs, averti
     refs_finales = sorted(set(refs))
     print(f"[TRACE-BAK] Références extraites : {refs_finales}")
     return refs_finales, q_clean.strip(), a_clean.strip()
-
-
-# === Fonctions de style pour factorisation ===
-
-def formater_paragraphe(p):
-    p.paragraph_format.space_after = 0
-    p.paragraph_format.space_before = 0
-    p.paragraph_format.line_spacing = 1
-
-def ajouter_ligne(doc, ligne):
-    p = doc.add_paragraph(ligne.strip())
-    formater_paragraphe(p)
-    return p
-
 
 def verifier_et_inserer_introduction(tableau, langue, lignes_out, erreurs, avertissements):
     """
@@ -430,27 +416,23 @@ def transformer_tableau_et_images(doc_path):
         elif ligne.strip() == "":
             if not previous_blank:
                 p = doc_out.add_paragraph('')
-                formater_paragraphe(p)
-#                p.paragraph_format.space_after = 0
-#                p.paragraph_format.space_before = 0
-#                p.paragraph_format.line_spacing = 1
-
+                p.paragraph_format.space_after = 0
+                p.paragraph_format.space_before = 0
+                p.paragraph_format.line_spacing = 1
                 previous_blank = True
 
         elif ligne.strip().startswith("#Q###"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("#A---"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("@ImgSize:"):
@@ -477,18 +459,16 @@ def transformer_tableau_et_images(doc_path):
             run.italic = True
             from docx.shared import RGBColor
             run.font.color.rgb = RGBColor(150, 150, 150)
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         else:
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         ligne_idx += 1

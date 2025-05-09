@@ -85,9 +85,6 @@ def process_docx(docx_path: Path):
     print(f"🔍 Traitement : {nom_fichier}", end="")
     doc = Document(docx_path)
 
-    for i, p in enumerate(doc.paragraphs[:10]): 
-        print(f"[DEBUG] ligne {i+1} : {p.text!r}")
-
     langue_courante = None
     bloc_detecte = False
     bloc_texte = []
@@ -171,7 +168,10 @@ def process_docx(docx_path: Path):
                 compteur_images[langue_courante] += 1
 
         # Ajouter le pied de page et écrire le fichier
-        bloc_texte += ["", "## Work Stop", "", "## End of Form"]
+#        bloc_texte += ["", "## Work Stop", "", "## End of Form"]
+        bloc_texte += ["", "##Introduction", "[texte d’introduction]", "", "##Work Start"]
+        bloc_texte += ["", "##Work End", "##Form End"]
+
         txt_path = output_dir / f"{nom_fichier}.txt"
         txt_path.write_text("\n".join(bloc_texte), encoding="utf-8")
 

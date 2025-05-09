@@ -1,0 +1,8 @@
+passe1_docx_lin_to_txt_20250418_211219.py
+=> sauvegarde des images dans /images
+
+passe1_docx_lin_to_txt_20250418_213544.py
+nouvelle boucle de détection des langues
+
+passe1_docx_lin_to_txt_20250418_230011.py
+début intégration changement de langue avec ##LANG-fre  de  it

@@ -12,19 +12,43 @@ from docx import Document
 from docx.shared import Inches
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from datetime import datetime
-from passe_tools import INPUT_DIR_0, OUTPUT_DIR_0, LOG_DIR_0, IMAGE_DIR_0, generer_entete
 from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.14"
+SCRIPT_VERSION = "v2.13"
 
+base_dir = Path(__file__).resolve().parent.parent
+DATA_DIR = base_dir / "data"
+INPUT_DIR = DATA_DIR / "00docx_tab"
+OUTPUT_DIR = DATA_DIR / "01docx_lin_in"
+LOG_DIR = OUTPUT_DIR / "log"
+IMAGE_DIR = OUTPUT_DIR / "images"
 
-OUTPUT_DIR_0.mkdir(parents=True, exist_ok=True)
-LOG_DIR_0.mkdir(parents=True, exist_ok=True)
-IMAGE_DIR_0.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-files = list(INPUT_DIR_0.glob("*.docx"))
+files = list(INPUT_DIR.glob("*.docx"))
+
+def generer_entete(langue, id_code, nom_fichier):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    return [
+        '##Identification',
+        f'#Script : {SCRIPT_VERSION}.py',
+        f'#Run at : {now}',
+        f'#ID file : {nom_fichier}',
+        f'##LANG-{langue}',
+        f'#ID : {id_code}',
+        '#Version :',
+        '#Date :',
+        '#Author :',
+        '',
+        '##Introduction',
+        '',
+        '##Work Start'
+    ]
+
 
 def cell_contient_image(cell):
     for paragraph in cell._element.xpath(".//w:drawing | .//w:pict"):
@@ -118,90 +142,23 @@ def extraire_et_inserer_refbak(q_texte, a_texte, prefix_branche, erreurs, averti
     return refs_finales, q_clean.strip(), a_clean.strip()
 
 
-# === Fonctions de style pour factorisation ===
-
-def formater_paragraphe(p):
-    p.paragraph_format.space_after = 0
-    p.paragraph_format.space_before = 0
-    p.paragraph_format.line_spacing = 1
-
-def ajouter_ligne(doc, ligne):
-    p = doc.add_paragraph(ligne.strip())
-    formater_paragraphe(p)
-    return p
-
-
-def verifier_et_inserer_introduction(tableau, langue, lignes_out, erreurs, avertissements):
-    """
-    Vérifie que la ligne 2 du tableau contient #Introduction.
-    Ajoute le texte dans lignes_out si présent. Loggue erreurs/warnings sinon.
-    """    
-    try:
-        ligne_intro = tableau.rows[1]
-        contenu_gauche = ligne_intro.cells[0].text.strip()
-        contenu_droit = ligne_intro.cells[1].text.strip()
-        print(f"[DEBUG] contrôle Introduction vide pour la langue {langue}. contenu droit {contenu_droit}")
-        if contenu_gauche != "#Introduction":
-            erreurs.append(f"[ERROR] Introduction absente dans la 2e ligne pour la langue {langue}.")
-        else:
-            if not contenu_droit:
-                avertissements.append(f"[WARN] Introduction vide pour la langue {langue}.")
-            lignes_out.append("")
-            lignes_out.append(contenu_droit)
-            lignes_out.append("")
-    except Exception as e:
-        erreurs.append(f"[ERROR] Impossible de lire la ligne d’introduction pour la langue {langue} : {e}")
-
-
 def transformer_tableau_et_images(doc_path):
     doc = Document(doc_path)
     nom_fichier = doc_path.name
     prefix = nom_fichier.replace('.docx', '')
     id_code = '-'.join(nom_fichier.replace('.docx', '').split('-')[:3])
-
-#recherche des données du questionnaire
-    version = ""
-    date = ""
-    auteur = ""
-    avertissements = []
-    erreurs = []
-
-    try:
-        tableau = doc.tables[0]
-        lignes = tableau.rows
-        if len(lignes) >= 1:
-            cellule_infos = lignes[0].cells[1].text.strip()
-            for line in cellule_infos.splitlines():
-                if "#Version" in line:
-                    version = line.split(":", 1)[-1].strip()
-                elif "#Date" in line:
-                    date = line.split(":", 1)[-1].strip()
-                elif "#Author" in line:
-                    auteur = line.split(":", 1)[-1].strip()
-
-            if not version:
-                avertissements.append("[WARN] Champ #Version manquant dans la première ligne.")
-            if not date:
-                avertissements.append("[WARN] Champ #Date manquant dans la première ligne.")
-            if not auteur:
-                avertissements.append("[WARN] Champ #Author manquant dans la première ligne.")
-        else:
-            avertissements.append("[WARN] Tableau trop court pour contenir les champs d'en-tête.")
-    except Exception as e:
-        erreurs.append(f"[ERROR] Exception lors de la lecture de l'en-tête : {e}")
-
-
-
     entete_inseree = False
     bloc_langue_actif = True
     langues_traitees = set()
     langue = None
     lignes_out = []
+    avertissements = []
+    erreurs = []
     branche_bak = prefix.split("-")[0]  # ex: '40' depuis '40-2-04'
     print(f"[DEBUG] Branche BAK détectée depuis nom de fichier : {branche_bak}")
 
 #Extraction des images du tableau
-    images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR_0, prefix)
+    images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR, prefix)
 
 # pour chaque table
     for table_idx, table in enumerate(doc.tables):
@@ -212,34 +169,28 @@ def transformer_tableau_et_images(doc_path):
         total_rows = len(table.rows)
 
 # ========== Détection de langue à partir de la ligne 0 ==========
-
         ligne_0 = " | ".join([cell.text.strip() for cell in table.rows[0].cells])
-        langue = None
 
         if ligne_0.startswith("Défi") and 'fr' not in langues_traitees:
             langue = 'fr'
-        elif ligne_0.startswith("Herausforderung") and 'de' not in langues_traitees:
-            langue = 'de'
-
-        if langue and langue not in langues_traitees:
-            lignes_out.extend(generer_entete(langue, id_code, nom_fichier, SCRIPT_VERSION, version, date, auteur))
-            verifier_et_inserer_introduction(table, langue, lignes_out, erreurs, avertissements)
+            lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
             entete_inseree = True
             bloc_langue_actif = True
             langues_traitees.add(langue)
-            print(f"[DEBUG] Bloc {langue} détecté par la ligne 0")
+            print("[DEBUG] Bloc français détecté par la ligne 0")
 
+        elif ligne_0.startswith("Herausforderung") and 'de' not in langues_traitees:
+            langue = 'de'
+            lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
+            entete_inseree = True
+            bloc_langue_actif = True
+            langues_traitees.add(langue)
+            print("[DEBUG] Bloc allemand détecté par la ligne 0")
 
-#        for row_idx, row in enumerate(table.rows):
-
-# 🧭 Lignes 0 = données d'en-tête ; 1 = introduction ; Q/R à partir de la ligne 2
-        for row_idx, row in enumerate(table.rows[2:], start=2):
+        for row_idx, row in enumerate(table.rows):
 
     # On ignore systématiquement la première ligne (ligne 0) et la dernière (ligne n-1)
-#            if row_idx == 0 or row_idx == total_rows - 1:
-
-# car ne passe jamais par 0
-            if row_idx == total_rows - 1:
+            if row_idx == 0 or row_idx == total_rows - 1:
                 continue
 
             cellules = [cell.text.strip() for cell in row.cells]
@@ -305,10 +256,10 @@ def transformer_tableau_et_images(doc_path):
     previous_blank = False
 # Export de l'état de lignes_out avant structuration Q/A
 
-    with open(LOG_DIR_0 / f"{prefix}_av_struct_{SCRIPT_VERSION}.txt", "w", encoding="utf-8") as f:
+    with open(LOG_DIR / f"{prefix}_av_struct_{SCRIPT_VERSION}.txt", "w", encoding="utf-8") as f:
         for i, ligne in enumerate(lignes_out):
             f.write(f"[{i:03d}] {ligne}\n")
-    print(f"[LOG] État brut exporté dans : {LOG_DIR_0 / f'{prefix}_av_struct_{SCRIPT_VERSION}.txt'}")
+    print(f"[LOG] État brut exporté dans : {LOG_DIR / f'{prefix}_av_struct_{SCRIPT_VERSION}.txt'}")
 
 #### Étape 4. Structuration des blocs Q/A
     lignes_reformatees = []
@@ -363,6 +314,10 @@ def transformer_tableau_et_images(doc_path):
                 ligne_idx += 3
                 continue
 
+#            # ❌ Si une seule des deux cellules est vide → erreur
+#            if (not q_texte and a_texte_raw) or (q_texte and not a_texte_raw):
+#                erreurs.append(f"Cellule vide seule (langue {langue_courante}, ligne {ligne_locale}) — {'Q manquante' if not q_texte else 'R manquante'}")
+
             # ❌ Si une seule des deux cellules est vide → erreur
             if (not q_texte and a_texte_raw) or (q_texte and not a_texte_raw):
                 if no_ligne_tab >= 0:
@@ -370,6 +325,8 @@ def transformer_tableau_et_images(doc_path):
                 else:
                     ligne_ref = f"ligne {ligne_locale}"
                 erreurs.append(f"[ERROR] Cellule vide seule (langue {langue_courante}, {ligne_ref}) — {'Q manquante' if not q_texte else 'R manquante'}")
+
+
 
             # Lire les repères Q/R sur les deux lignes suivantes
             repere_q = lignes_out[ligne_idx + 1].strip() if ligne_idx + 1 < len(lignes_out) else ""
@@ -430,27 +387,23 @@ def transformer_tableau_et_images(doc_path):
         elif ligne.strip() == "":
             if not previous_blank:
                 p = doc_out.add_paragraph('')
-                formater_paragraphe(p)
-#                p.paragraph_format.space_after = 0
-#                p.paragraph_format.space_before = 0
-#                p.paragraph_format.line_spacing = 1
-
+                p.paragraph_format.space_after = 0
+                p.paragraph_format.space_before = 0
+                p.paragraph_format.line_spacing = 1
                 previous_blank = True
 
         elif ligne.strip().startswith("#Q###"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("#A---"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("@ImgSize:"):
@@ -462,7 +415,7 @@ def transformer_tableau_et_images(doc_path):
                     cle_img = (int(t), int(r), qr)
                     if cle_img in images_par_cellule:
                         for nom_img in images_par_cellule[cle_img]:
-                            image_path = IMAGE_DIR_0 / nom_img
+                            image_path = IMAGE_DIR / nom_img
                             if image_path.exists():
                                 p = doc_out.add_paragraph()
                                 run = p.add_run()
@@ -477,26 +430,26 @@ def transformer_tableau_et_images(doc_path):
             run.italic = True
             from docx.shared import RGBColor
             run.font.color.rgb = RGBColor(150, 150, 150)
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         else:
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         ligne_idx += 1
     
-    output_path = OUTPUT_DIR_0 / nom_fichier
+    output_path = OUTPUT_DIR / nom_fichier
     doc_out.save(output_path)
 
-    log_file = LOG_DIR_0 / f"{prefix}_passe0_{SCRIPT_VERSION}.log"
+    from datetime import datetime
+
+    log_file = LOG_DIR / f"{prefix}_passe0_{SCRIPT_VERSION}.log"
     with open(log_file, "w", encoding="utf-8") as log:
         log.write(f"# Log de traitement — passe0 (version : {SCRIPT_VERSION})\n")
         log.write(f"# Fichier     : {nom_fichier}\n")
@@ -521,12 +474,18 @@ def transformer_tableau_et_images(doc_path):
             for err in erreurs:
                 log.write(f"{err}\n")
 
-    statut_global = "ERROR" if erreurs else ("WARNING" if avertissements else "OK")
+    statut_global = "NOT OK" if erreurs else ("Warning" if avertissements else "OK")
     print(f"[INFO] Fichier de sortie généré : {output_path}")
     print(f"[INFO] Log sauvegardé dans : {log_file}")
     return nom_fichier, statut_global, erreurs, avertissements
 
 # Exécution principale
+print("=== Informations sur les chemins ===")
+print(f"Répertoire du script      : {base_dir}")
+print(f"Dossier d'entrée          : {INPUT_DIR}")
+print(f"Dossier de sortie         : {OUTPUT_DIR}")
+print(f"Fichiers .docx détectés   : {len(files)}")
+print("====================================\n")
 
 global_log = []
 
@@ -541,7 +500,9 @@ for file in files:
         global_log.append((file.name, f"ERROR: {str(e)}"))
         print(f"{file.name} : ERROR")
 
-global_log_path = LOG_DIR_0 / f"log_global_passe0_{SCRIPT_VERSION}.log"
+from datetime import datetime
+
+global_log_path = LOG_DIR / f"log_global_passe0_{SCRIPT_VERSION}.log"
 with open(global_log_path, "w", encoding="utf-8") as g:
     g.write(f"# Log global — passe0 (version : {SCRIPT_VERSION})\n")
     g.write(f"# Date : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")

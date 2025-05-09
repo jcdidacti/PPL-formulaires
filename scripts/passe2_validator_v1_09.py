@@ -1,6 +1,6 @@
 # ============================================================================
-# Script : passe2_validator.py (v1.09d)
-# Objectif : Détection des balises de structure dupliquées et questions après ##Work End
+# Script : passe2_validator.py (v1.09c)
+# Objectif : Valider tous les blocs ##Identification, même mal formés, et signaler les erreurs internes
 # Date : 2025-05-01
 # ============================================================================
 
@@ -55,24 +55,9 @@ def analyser_fichier(path_txt: Path):
 
         fin_bloc = positions_ident[positions_ident.index(start)+1] if positions_ident.index(start)+1 < len(positions_ident) else len(lines)
         bloc_texte = lines[start:fin_bloc]
-
-        # Vérifier la présence et l'unicité des balises de structure
         for balise in balises_structure_langue:
-            occurences = [i for i, l in enumerate(bloc_texte) if l.strip() == balise]
-            if len(occurences) == 0:
+            if not any(l.strip() == balise for l in bloc_texte):
                 enregistrer_erreur(erreurs, erreurs_par_ligne, start+1, f"balise manquante dans bloc langue : {balise}")
-            elif len(occurences) > 1:
-                for pos in occurences[1:]:
-                    enregistrer_erreur(erreurs, erreurs_par_ligne, start + pos + 1, f"balise dupliquée : {balise}")
-
-        # Vérifier les #Q après ##Work End
-        work_end_found = False
-        for i in range(start, fin_bloc):
-            lstrip = lines[i].strip()
-            if lstrip == "##Work End":
-                work_end_found = True
-            elif work_end_found and lstrip.startswith("#Q"):
-                enregistrer_erreur(erreurs, erreurs_par_ligne, i+1, "#Q après ##Work End — bloc mal structuré")
 
     if not form_end_found:
         enregistrer_erreur(erreurs, erreurs_par_ligne, len(lines), f"balise manquante : {balise_form_end}")
@@ -92,7 +77,7 @@ def analyser_fichier(path_txt: Path):
 
     log_path = output_dir / f"{nom_base}.log"
     with open(log_path, "w", encoding="utf-8") as log:
-        log.write("# Log de validation — passe2 (v1.09d — contrôle affiné)\n")
+        log.write("# Log de validation — passe2 (v1.09c — blocs + malformés)\n")
         log.write(f"# Fichier : {nom_base}\n\n")
         if erreurs:
             for num, msg in erreurs:

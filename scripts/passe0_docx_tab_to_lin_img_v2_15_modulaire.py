@@ -17,14 +17,39 @@ from collections import defaultdict
 
 #Étape 1. Initialisation des chemins et constante
 
-SCRIPT_VERSION = "v2.14"
+SCRIPT_VERSION = "v2.15"
 
 
-OUTPUT_DIR_0.mkdir(parents=True, exist_ok=True)
-LOG_DIR_0.mkdir(parents=True, exist_ok=True)
-IMAGE_DIR_0.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+IMAGE_DIR.mkdir(parents=True, exist_ok=True)
 
-files = list(INPUT_DIR_0.glob("*.docx"))
+files = list(INPUT_DIR.glob("*.docx"))
+
+
+    - langue : "fr" ou "de"
+    - id_code : ex. "00-2-04"
+    - nom_fichier : nom original du .docx
+    - version_script : ex. "v2.14"
+    - version, date, auteur : extraits du tableau (ou vides si manquants)
+    """
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    return [
+        "##Identification",
+        f"#Script : {version_script}.py",
+        f"#Run at : {now}",
+        f"#ID file : {nom_fichier}",
+        f"##LANG-{langue}",
+        f"#ID : {id_code}",
+        f"#Version : {version}",
+        f"#Date : {date}",
+        f"#Author : {auteur}",
+        "",
+        "##Introduction",
+        "",
+        "##Work Start"
+    ]
+
 
 def cell_contient_image(cell):
     for paragraph in cell._element.xpath(".//w:drawing | .//w:pict"):
@@ -117,20 +142,6 @@ def extraire_et_inserer_refbak(q_texte, a_texte, prefix_branche, erreurs, averti
     print(f"[TRACE-BAK] Références extraites : {refs_finales}")
     return refs_finales, q_clean.strip(), a_clean.strip()
 
-
-# === Fonctions de style pour factorisation ===
-
-def formater_paragraphe(p):
-    p.paragraph_format.space_after = 0
-    p.paragraph_format.space_before = 0
-    p.paragraph_format.line_spacing = 1
-
-def ajouter_ligne(doc, ligne):
-    p = doc.add_paragraph(ligne.strip())
-    formater_paragraphe(p)
-    return p
-
-
 def verifier_et_inserer_introduction(tableau, langue, lignes_out, erreurs, avertissements):
     """
     Vérifie que la ligne 2 du tableau contient #Introduction.
@@ -201,7 +212,7 @@ def transformer_tableau_et_images(doc_path):
     print(f"[DEBUG] Branche BAK détectée depuis nom de fichier : {branche_bak}")
 
 #Extraction des images du tableau
-    images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR_0, prefix)
+    images_par_cellule = extraire_images_des_cellules(doc, IMAGE_DIR, prefix)
 
 # pour chaque table
     for table_idx, table in enumerate(doc.tables):
@@ -305,10 +316,10 @@ def transformer_tableau_et_images(doc_path):
     previous_blank = False
 # Export de l'état de lignes_out avant structuration Q/A
 
-    with open(LOG_DIR_0 / f"{prefix}_av_struct_{SCRIPT_VERSION}.txt", "w", encoding="utf-8") as f:
+    with open(LOG_DIR / f"{prefix}_av_struct_{SCRIPT_VERSION}.txt", "w", encoding="utf-8") as f:
         for i, ligne in enumerate(lignes_out):
             f.write(f"[{i:03d}] {ligne}\n")
-    print(f"[LOG] État brut exporté dans : {LOG_DIR_0 / f'{prefix}_av_struct_{SCRIPT_VERSION}.txt'}")
+    print(f"[LOG] État brut exporté dans : {LOG_DIR / f'{prefix}_av_struct_{SCRIPT_VERSION}.txt'}")
 
 #### Étape 4. Structuration des blocs Q/A
     lignes_reformatees = []
@@ -430,27 +441,23 @@ def transformer_tableau_et_images(doc_path):
         elif ligne.strip() == "":
             if not previous_blank:
                 p = doc_out.add_paragraph('')
-                formater_paragraphe(p)
-#                p.paragraph_format.space_after = 0
-#                p.paragraph_format.space_before = 0
-#                p.paragraph_format.line_spacing = 1
-
+                p.paragraph_format.space_after = 0
+                p.paragraph_format.space_before = 0
+                p.paragraph_format.line_spacing = 1
                 previous_blank = True
 
         elif ligne.strip().startswith("#Q###"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("#A---"):
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         elif ligne.strip().startswith("@ImgSize:"):
@@ -462,7 +469,7 @@ def transformer_tableau_et_images(doc_path):
                     cle_img = (int(t), int(r), qr)
                     if cle_img in images_par_cellule:
                         for nom_img in images_par_cellule[cle_img]:
-                            image_path = IMAGE_DIR_0 / nom_img
+                            image_path = IMAGE_DIR / nom_img
                             if image_path.exists():
                                 p = doc_out.add_paragraph()
                                 run = p.add_run()
@@ -477,26 +484,27 @@ def transformer_tableau_et_images(doc_path):
             run.italic = True
             from docx.shared import RGBColor
             run.font.color.rgb = RGBColor(150, 150, 150)
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         else:
             p = doc_out.add_paragraph(ligne.strip())
-            formater_paragraphe(p)
-#            p.paragraph_format.space_after = 0
-#            p.paragraph_format.space_before = 0
-#            p.paragraph_format.line_spacing = 1
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
             previous_blank = False
 
         ligne_idx += 1
     
-    output_path = OUTPUT_DIR_0 / nom_fichier
+    output_path = OUTPUT_DIR / nom_fichier
     doc_out.save(output_path)
 
-    log_file = LOG_DIR_0 / f"{prefix}_passe0_{SCRIPT_VERSION}.log"
+    from datetime import datetime
+from passe_tools import INPUT_DIR_0, OUTPUT_DIR_0, LOG_DIR_0, IMAGE_DIR_0, generer_entete
+
+    log_file = LOG_DIR / f"{prefix}_passe0_{SCRIPT_VERSION}.log"
     with open(log_file, "w", encoding="utf-8") as log:
         log.write(f"# Log de traitement — passe0 (version : {SCRIPT_VERSION})\n")
         log.write(f"# Fichier     : {nom_fichier}\n")
@@ -527,6 +535,12 @@ def transformer_tableau_et_images(doc_path):
     return nom_fichier, statut_global, erreurs, avertissements
 
 # Exécution principale
+print("=== Informations sur les chemins ===")
+print(f"Répertoire du script      : {base_dir}")
+print(f"Dossier d'entrée          : {INPUT_DIR}")
+print(f"Dossier de sortie         : {OUTPUT_DIR}")
+print(f"Fichiers .docx détectés   : {len(files)}")
+print("====================================\n")
 
 global_log = []
 
@@ -541,7 +555,10 @@ for file in files:
         global_log.append((file.name, f"ERROR: {str(e)}"))
         print(f"{file.name} : ERROR")
 
-global_log_path = LOG_DIR_0 / f"log_global_passe0_{SCRIPT_VERSION}.log"
+from datetime import datetime
+from passe_tools import INPUT_DIR_0, OUTPUT_DIR_0, LOG_DIR_0, IMAGE_DIR_0, generer_entete
+
+global_log_path = LOG_DIR / f"log_global_passe0_{SCRIPT_VERSION}.log"
 with open(global_log_path, "w", encoding="utf-8") as g:
     g.write(f"# Log global — passe0 (version : {SCRIPT_VERSION})\n")
     g.write(f"# Date : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")

@@ -1,0 +1,242 @@
+# ==============================================================================
+# Script : passe0_docx_tab_to_lin_v1_85.py
+# Objectif : insérer les images directement depuis les cellules, en respectant leur ordre réel
+# Date : 2025-05-02
+# ==============================================================================
+
+import os
+import hashlib
+import re
+from pathlib import Path
+from docx import Document
+from docx.shared import Inches
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from datetime import datetime
+
+SCRIPT_VERSION = "v1_85"
+
+base_dir = Path(__file__).resolve().parent.parent
+DATA_DIR = base_dir / "data"
+INPUT_DIR = DATA_DIR / "00docx_tab"
+OUTPUT_DIR = DATA_DIR / "01docx_lin_in"
+LOG_DIR = OUTPUT_DIR / "log"
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+files = list(INPUT_DIR.glob("*.docx"))
+
+def generer_entete(langue, id_code, nom_fichier):
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    return [
+        '##Identification',
+        f'#Script : {SCRIPT_VERSION}.py',
+        f'#Run at : {now}',
+        f'#ID file : {nom_fichier}',
+        f'##LANG-{langue}',
+        f'#ID : {id_code}',
+        '#Version :',
+        '#Date :',
+        '#Author :',
+        '',
+        '##Introduction',
+        '',
+        '##Work Start'
+    ]
+
+def cell_contient_image(cell):
+    for paragraph in cell._element.xpath(".//w:drawing | .//w:pict"):
+        return True
+    return False
+
+def extraire_images_des_cellules(doc, output_dir):
+    images = []
+    index = 1
+    for table_idx, table in enumerate(doc.tables):
+        for row_idx, row in enumerate(table.rows):
+            for i, cell in enumerate(row.cells[:2]):
+                for drawing in cell._element.xpath(".//w:drawing"):
+                    blips = drawing.xpath(".//*[local-name()='blip']")
+                    for blip in blips:
+                        rId = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
+                        if rId:
+                            rel = doc.part.related_parts.get(rId)
+                            if rel:
+                                image_data = rel.blob
+                                image_name = f"image_{index:03d}_{'Q' if i == 0 else 'R'}_T{table_idx+1}R{row_idx+1}.jpeg"
+                                image_path = output_dir / image_name
+                                with open(image_path, "wb") as f:
+                                    f.write(image_data)
+                                images.append((image_name, image_path))
+                                index += 1
+    return images
+
+def transformer_tableau_et_images(doc_path):
+    doc = Document(doc_path)
+    nom_fichier = doc_path.name
+    id_code = '-'.join(nom_fichier.replace('.docx', '').split('-')[:3])
+    entete_inseree = False
+    bloc_langue_actif = True
+    langues_traitees = set()
+    langue = None
+    lignes_out = []
+
+    
+    # Prétraitement Q/A : restructuration lisible
+    lignes_reformatees = []
+    for ligne in lignes_out:
+        if "#Q" in ligne and "|" in ligne:
+            parts = ligne.split("|", 1)
+            q_part = parts[0].strip()
+            q_texte = q_part[q_part.find("#Q") + 2:].strip()
+            lignes_reformatees.append("#Q########################################################")
+            lignes_reformatees.append(q_texte)
+            a_part = parts[1].strip()
+            if a_part.startswith("#A") and "-" in a_part:
+                a_texte = a_part[a_part.find("#A") + 2:].lstrip("-").strip()
+                lignes_reformatees.append("")
+                lignes_reformatees.append("#A-----------------------------------------------------------------------------------")
+                lignes_reformatees.append(a_texte)
+            else:
+                print(f"[⚠️  WARN] Ligne avec #Q mais #A malformé : {ligne}")
+                lignes_reformatees.append(parts[1].strip())
+        else:
+            lignes_reformatees.append(ligne)
+    lignes_out = lignes_reformatees
+
+
+    doc_out = Document()
+    previous_blank = False
+
+    images_utilisees = extraire_images_des_cellules(doc, OUTPUT_DIR)
+
+    for table_idx, table in enumerate(doc.tables):
+        for row_idx, row in enumerate(table.rows):
+            cellules = [cell.text.strip() for cell in row.cells]
+            ligne = " | ".join(cellules).strip()
+            if not ligne:
+                continue
+
+            if ligne.startswith("Défi |"):
+                langue = 'fr'
+                if langue in langues_traitees:
+                    bloc_langue_actif = False
+                    continue
+                langues_traitees.add(langue)
+                lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
+                entete_inseree = True
+                bloc_langue_actif = True
+                continue
+
+            if ligne.startswith("Herausforderung |"):
+                langue = 'de'
+                if langue in langues_traitees:
+                    bloc_langue_actif = False
+                    continue
+                langues_traitees.add(langue)
+                lignes_out.extend(generer_entete(langue, id_code, nom_fichier))
+                entete_inseree = True
+                bloc_langue_actif = True
+                continue
+
+            if not bloc_langue_actif:
+                continue
+
+            if 'Temps passé à ce défi' in ligne or 'Für diese Herausforderung aufgewendete Zeit' in ligne:
+                if entete_inseree:
+                    lignes_out.append('##Work End')
+                    lignes_out.append('')
+                    if langue == 'fr':
+                        lignes_out.append('[PAGEBREAK]')
+                bloc_langue_actif = False
+                continue
+
+            lignes_out.append(ligne)
+
+    lignes_out.append('')
+    lignes_out.append('##Form End')
+
+    # === Structuration des blocs Q/A ===
+    lignes_reformatees = []
+    for ligne in lignes_out:
+        if "#Q" in ligne and "|" in ligne:
+            parts = ligne.split("|", 1)
+            q_part = parts[0].strip()
+            q_texte = q_part[q_part.find("#Q") + 2:].strip()
+            lignes_reformatees.append("#Q########################################################")
+            lignes_reformatees.append(q_texte)
+            a_part = parts[1].strip()
+            if "#A" in a_part and "-" in a_part:
+                a_texte = a_part[a_part.find("#A") + 2:].lstrip("-").strip()
+                lignes_reformatees.append("")
+                lignes_reformatees.append("#A-----------------------------------------------------------------------------------")
+                lignes_reformatees.append(a_texte)
+            else:
+                print(f"[⚠️  WARN] Ligne avec #Q mais #A malformé : {ligne}")
+                lignes_reformatees.append(parts[1].strip())
+        else:
+            lignes_reformatees.append(ligne)
+    lignes_out = lignes_reformatees
+
+
+    for l in lignes_out:
+        for sous_ligne in l.splitlines():
+            if sous_ligne.strip() == '[PAGEBREAK]':
+                doc_out.add_page_break()
+                previous_blank = False
+                continue
+            if sous_ligne.strip():
+                p = doc_out.add_paragraph(sous_ligne.strip())
+                p.paragraph_format.space_after = 0
+                p.paragraph_format.space_before = 0
+                p.paragraph_format.line_spacing = 1
+
+                # Insertion immédiate si #IMGQ# ou #IMGA# est présent
+                balise = "#IMGQ#" if "#IMGQ#" in sous_ligne else "#IMGA#" if "#IMGA#" in sous_ligne else None
+                if balise:
+                    for image_name, image_path in images_utilisees:
+                        suffixe = "_Q" if balise == "#IMGQ#" else "_R"
+                        if suffixe in image_name:
+                            try:
+                                doc_out.add_picture(str(image_path), width=Inches(4.5))
+                                p2 = doc_out.add_paragraph(f"[image insérée ici : {image_name}]")
+                                p2.paragraph_format.space_after = 0
+                                p2.paragraph_format.space_before = 0
+                                p2.paragraph_format.line_spacing = 1
+                                break  # une seule image par balise
+                            except Exception as e:
+                                doc_out.add_paragraph(f"[Erreur image {image_name} : {str(e)}]")
+                previous_blank = False
+            else:
+                if not previous_blank:
+                    p = doc_out.add_paragraph('')
+                    p.paragraph_format.space_after = 0
+                    p.paragraph_format.space_before = 0
+                    p.paragraph_format.line_spacing = 1
+                    previous_blank = True
+
+    # Insertion des images détectées, pour contrôle visuel
+    if images_utilisees:
+        doc_out.add_page_break()
+        doc_out.add_paragraph("Images extraites (ordre réel d'apparition dans le tableau) :")
+        for image_name, image_path in images_utilisees:
+            doc_out.add_picture(str(image_path), width=Inches(4.5))
+            p = doc_out.add_paragraph(f"[image: {image_name}]")
+            p.paragraph_format.space_after = 0
+            p.paragraph_format.space_before = 0
+            p.paragraph_format.line_spacing = 1
+
+    output_path = OUTPUT_DIR / nom_fichier
+    doc_out.save(output_path)
+    return nom_fichier
+
+# Exécution principale
+print("=== Informations sur les chemins ===")
+print(f"Répertoire du script      : {base_dir}")
+print(f"Dossier d'entrée          : {INPUT_DIR}")
+print(f"Dossier de sortie         : {OUTPUT_DIR}")
+print(f"Fichiers .docx détectés   : {len(files)}")
+print("====================================\n")
+
+for file in files:
+    result = transformer_tableau_et_images(file)
+    print(f"{file.name} : OK")

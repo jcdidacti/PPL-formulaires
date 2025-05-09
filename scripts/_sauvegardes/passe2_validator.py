@@ -1,0 +1,1 @@
+# [SCRIPT CONTENT RECONSTRUIT à partir du canevas corrigé]

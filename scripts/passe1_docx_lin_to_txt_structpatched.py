@@ -8,6 +8,18 @@ import os
 import re
 from pathlib import Path
 from docx import Document
+
+def verifier_entete(doc):
+    """Vérifie que les 5 premières balises d'en-tête sont présentes dans les 10 premières lignes."""
+    attendues = ["##Identification", "#Script", "#Run at", "#ID file", "##LANG-"]
+    lignes = [p.text.strip() for p in doc.paragraphs[:10] if p.text.strip()]
+    print(f"[DEBUG] lignes analysées : {lignes}")
+    correspondances = sum(any(ligne.startswith(att) for ligne in lignes) for att in attendues)
+    for att in attendues:
+        if not any(ligne.startswith(att) for ligne in lignes):
+            print(f"[WARN] Balise manquante ou incorrecte : {att}")
+    return correspondances == len(attendues)
+
 from hashlib import md5
 from datetime import datetime
 from docx.opc.constants import RELATIONSHIP_TYPE as RT
@@ -85,8 +97,9 @@ def process_docx(docx_path: Path):
     print(f"🔍 Traitement : {nom_fichier}", end="")
     doc = Document(docx_path)
 
-    for i, p in enumerate(doc.paragraphs[:10]): 
-        print(f"[DEBUG] ligne {i+1} : {p.text!r}")
+    if not verifier_entete(doc):
+        print("❌ Erreur : aucune balise détectée au début du document. Veuillez vérifier la structure initiale.")
+        return
 
     langue_courante = None
     bloc_detecte = False
